@@ -1,0 +1,137 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum ItemSource {
+  MANUAL
+  VOICE
+  PHOTO
+  TELEGRAM_TEXT
+  TELEGRAM_VOICE
+  RECIPE
+}
+
+model User {
+  id             String            @id @default(cuid())
+  email          String            @unique
+  displayName    String?
+  passwordHash   String
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+  memberships    WorkspaceMember[]
+  sessions       Session[]
+  addedItems     ShoppingItem[]    @relation("ItemCreator")
+  dictionary     ProductDictionary[]
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  userId    String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([token])
+}
+
+model Workspace {
+  id          String            @id @default(cuid())
+  name        String
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+  members     WorkspaceMember[]
+  lists       ShoppingList[]
+  dictionary  ProductDictionary[]
+  recipes     Recipe[]
+}
+
+model WorkspaceMember {
+  id          String    @id @default(cuid())
+  workspaceId String
+  userId      String
+  role        String    @default("member")
+  createdAt   DateTime  @default(now())
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, userId])
+}
+
+model ShoppingList {
+  id          String         @id @default(cuid())
+  workspaceId String
+  title       String
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+  archivedAt  DateTime?
+  workspace   Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  items       ShoppingItem[]
+}
+
+model ShoppingItem {
+  id             String       @id @default(cuid())
+  listId          String
+  createdById     String?
+  originalText    String
+  normalizedName  String
+  quantity        String?
+  category        String?
+  isBought        Boolean      @default(false)
+  position        Int          @default(0)
+  source          ItemSource   @default(MANUAL)
+  language        String?
+  confidence      Float?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+  boughtAt        DateTime?
+  list            ShoppingList @relation(fields: [listId], references: [id], onDelete: Cascade)
+  createdBy       User?        @relation("ItemCreator", fields: [createdById], references: [id], onDelete: SetNull)
+}
+
+model ProductDictionary {
+  id             String    @id @default(cuid())
+  workspaceId    String
+  userId         String?
+  synonym        String
+  normalizedName String
+  defaultUnit    String?
+  defaultCategory String?
+  language       String?
+  confidence     Float?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  workspace      Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user           User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId, synonym])
+}
+
+model Recipe {
+  id          String             @id @default(cuid())
+  workspaceId String
+  title       String
+  note        String?
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+  workspace   Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  ingredients RecipeIngredient[]
+}
+
+model RecipeIngredient {
+  id            String   @id @default(cuid())
+  recipeId       String
+  originalText   String
+  normalizedName String
+  quantity       String?
+  unit           String?
+  category       String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  recipe         Recipe   @relation(fields: [recipeId], references: [id], onDelete: Cascade)
+}
