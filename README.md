@@ -22,14 +22,30 @@ MVP личного мультиплатформенного PWA-приложен
 
 ## Railway Deploy
 
-- Создайте сервис из папки `apps/web` (Root Directory в настройках Railway).
-- Подключите PostgreSQL и привяжите к сервису (переменная `DATABASE_URL` подставится автоматически).
-- Добавьте переменные окружения:
-  - `SESSION_TTL_DAYS=30`
-- **Build command** (нужен `DATABASE_URL` на этапе сборки; у Railway он доступен, если БД уже привязана):
+Есть два рабочих варианта (выберите один).
+
+### Вариант 1 — Railpack / Nixpacks (без Docker)
+
+В настройках сервиса Railway → **Settings → Source → Root Directory** укажите **`apps/web`**. Иначе Railpack смотрит корень монорепозитория и не находит `package.json` приложения.
+
+Дальше:
+
+- Подключите PostgreSQL к сервису (`DATABASE_URL` подставится автоматически).
+- Переменная **`SESSION_TTL_DAYS=30`**.
+- **Build command** (нужен `DATABASE_URL` на сборке, если миграции в build):
   - `npx prisma migrate deploy && npm run prisma:generate && npm run build`
-- **Start command:** `npm run start`
+- **Start:** `npm run start`
 
-Альтернатива: оставить build как `npm run prisma:generate && npm run build`, а миграции выполнять в **Release Command** Railway: `npx prisma migrate deploy`.
+Либо build без миграций и **Release Command:** `npx prisma migrate deploy`.
 
-Локально после клонирования: `cd apps/web && cp .env.example .env`, задать `DATABASE_URL`, затем `npx prisma migrate dev` (или только `npx prisma migrate deploy`, если база пустая и миграции уже в репозитории).
+### Вариант 2 — Docker из корня репозитория (без Root Directory)
+
+В корне репозитория лежит **`Dockerfile`**: он копирует `apps/web` и собирает образ. В Railway включите сборку через **Docker** (или оставьте автоопределение, если платформа подхватывает Dockerfile).
+
+При старте контейнера выполняется **`npx prisma migrate deploy`** и затем **`npm run start`** (миграции не зашиты в слой сборки, достаточно `DATABASE_URL` в runtime).
+
+Локально проверка образа: `docker build -t shop-web .` из корня репозитория.
+
+---
+
+Локально после клонирования: `cd apps/web && cp .env.example .env`, задать `DATABASE_URL`, затем `npx prisma migrate dev` (или `npx prisma migrate deploy`, если база пустая и миграции уже в репозитории).
