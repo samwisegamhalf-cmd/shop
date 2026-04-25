@@ -26,10 +26,12 @@ RUN npm ci --omit=dev
 COPY apps/web/public ./public
 COPY apps/web/prisma ./prisma
 COPY apps/web/next.config.ts ./
+COPY apps/web/scripts ./scripts
 COPY --from=builder /app/.next ./.next
+
+RUN chmod +x ./scripts/start.sh
 
 EXPOSE 3000
 ENV PORT=3000
-ENV HOSTNAME=0.0.0.0
 
-CMD ["sh", "-c", "npx prisma migrate deploy && exec npm run start"]
+CMD ["./scripts/start.sh"]
