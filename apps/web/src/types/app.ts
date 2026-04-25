@@ -14,7 +14,8 @@ export type ShoppingItemDto = {
   source: string;
   language: string | null;
   confidence: number | null;
-  updatedAt: Date;
+  /** ISO string after server → client serialization */
+  updatedAt: string;
 };
 
 export type ShoppingListDto = {

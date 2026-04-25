@@ -1,6 +1,9 @@
 import { ShoppingApp } from "@/components/shopping-app";
 import { requireAuth } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { shoppingListsForClient } from "@/lib/serializeForClient";
+
+export const dynamic = "force-dynamic";
 
 export default async function Home() {
   const session = await requireAuth();
@@ -23,6 +26,8 @@ export default async function Home() {
     orderBy: { updatedAt: "desc" },
   });
 
+  const initialLists = shoppingListsForClient(lists);
+
   return (
     <main>
       <ShoppingApp
@@ -31,7 +36,7 @@ export default async function Home() {
           name: membership.workspace.name,
           role: membership.role,
         }}
-        initialLists={lists}
+        initialLists={initialLists}
       />
     </main>
   );
