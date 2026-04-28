@@ -11,13 +11,11 @@ type Props = {
   initialLists: ShoppingListDto[];
 };
 
-type ItemsByCategory = Record<string, ShoppingItemDto[]>;
 type EditingState = {
   id: string;
   name: string;
   amount: string;
   unit: string;
-  category: string;
 };
 
 export function ShoppingApp({ workspace, initialLists }: Props) {
@@ -27,11 +25,12 @@ export function ShoppingApp({ workspace, initialLists }: Props) {
   const [itemName, setItemName] = useState("");
   const [itemAmount, setItemAmount] = useState("");
   const [itemUnit, setItemUnit] = useState("");
-  const [itemCategory, setItemCategory] = useState("");
   const [newListTitle, setNewListTitle] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [editingItem, setEditingItem] = useState<EditingState | null>(null);
+  const [isRenamingList, setIsRenamingList] = useState(false);
+  const [renameListTitle, setRenameListTitle] = useState("");
 
   const activeList = useMemo(
     () => lists.find((list) => list.id === activeListId) ?? lists[0] ?? null,
@@ -58,21 +57,14 @@ export function ShoppingApp({ workspace, initialLists }: Props) {
     return () => clearInterval(timer);
   }, [loadLists]);
 
-  const grouped = useMemo(() => {
-    if (!activeList) return { pending: {}, bought: {} } as { pending: ItemsByCategory; bought: ItemsByCategory };
-
-    const pending: ItemsByCategory = {};
-    const bought: ItemsByCategory = {};
-
-    activeList.items.forEach((item) => {
-      const bucket = item.isBought ? bought : pending;
-      const category = item.category?.trim() || "Без категории";
-      if (!bucket[category]) bucket[category] = [];
-      bucket[category].push(item);
-    });
-
-    return { pending, bought };
-  }, [activeList]);
+  const pendingItems = useMemo(
+    () => (activeList ? activeList.items.filter((item) => !item.isBought) : []),
+    [activeList],
+  );
+  const boughtItems = useMemo(
+    () => (activeList ? activeList.items.filter((item) => item.isBought) : []),
+    [activeList],
+  );
 
   async function submitQuickInput() {
     if (!activeList || !quickInput.trim()) return;
@@ -111,7 +103,6 @@ export function ShoppingApp({ workspace, initialLists }: Props) {
             originalText: itemName.trim(),
             normalizedName: itemName.trim().toLowerCase(),
             quantity: quantity || null,
-            category: itemCategory.trim() || null,
           },
         ],
       }),
@@ -126,7 +117,6 @@ export function ShoppingApp({ workspace, initialLists }: Props) {
     setItemName("");
     setItemAmount("");
     setItemUnit("");
-    setItemCategory("");
     await loadLists();
   }
 
@@ -149,21 +139,26 @@ export function ShoppingApp({ workspace, initialLists }: Props) {
     await loadLists();
   }
 
-  async function renameActiveList() {
+  function startRenameList() {
     if (!activeList) return;
-    const title = window.prompt("Новое название списка", activeList.title);
-    if (!title || !title.trim()) return;
+    setRenameListTitle(activeList.title);
+    setIsRenamingList(true);
+  }
+
+  async function renameActiveList() {
+    if (!activeList || !renameListTitle.trim()) return;
 
     const res = await fetch(`/api/lists/${activeList.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title: title.trim() }),
+      body: JSON.stringify({ title: renameListTitle.trim() }),
     });
 
     if (!res.ok) {
       setError("Не удалось переименовать список");
       return;
     }
+    setIsRenamingList(false);
     await loadLists();
   }
 
@@ -210,7 +205,6 @@ export function ShoppingApp({ workspace, initialLists }: Props) {
       originalText: editingItem.name.trim(),
       normalizedName: editingItem.name.trim().toLowerCase(),
       quantity: quantity || null,
-      category: editingItem.category.trim() || null,
     });
     setEditingItem(null);
   }
@@ -261,13 +255,38 @@ export function ShoppingApp({ workspace, initialLists }: Props) {
       </section>
 
       <section className={styles.activeListActions}>
-        <button
-          className={styles.ghostButton}
-          onClick={renameActiveList}
-          disabled={!activeList}
-        >
-          Переименовать список
-        </button>
+        {isRenamingList ? (
+          <form
+            className={styles.renameListForm}
+            onSubmit={(event) => {
+              event.preventDefault();
+              renameActiveList().catch(() => undefined);
+            }}
+          >
+            <input
+              value={renameListTitle}
+              onChange={(e) => setRenameListTitle(e.target.value)}
+              placeholder="Название списка"
+              required
+            />
+            <button className={styles.primaryMiniButton} type="submit">Сохранить</button>
+            <button
+              className={styles.ghostButton}
+              type="button"
+              onClick={() => setIsRenamingList(false)}
+            >
+              Отмена
+            </button>
+          </form>
+        ) : (
+          <button
+            className={styles.ghostButton}
+            onClick={startRenameList}
+            disabled={!activeList}
+          >
+            Переименовать список
+          </button>
+        )}
         <button
           className={styles.dangerButton}
           onClick={deleteActiveList}
@@ -294,11 +313,6 @@ export function ShoppingApp({ workspace, initialLists }: Props) {
           onChange={(e) => setItemUnit(e.target.value)}
           placeholder="Ед. изм."
         />
-        <input
-          value={itemCategory}
-          onChange={(e) => setItemCategory(e.target.value)}
-          placeholder="Категория"
-        />
         <button type="submit" disabled={loading || !activeList}>Добавить</button>
       </form>
 
@@ -317,63 +331,51 @@ export function ShoppingApp({ workspace, initialLists }: Props) {
 
       <section className={styles.block}>
         <h2>Купить</h2>
-        {Object.entries(grouped.pending).map(([category, items]) => (
-          <div key={category} className={styles.category}>
-            <h3>{category}</h3>
-            {items.map((item) => (
-              <ItemRow
-                key={item.id}
-                item={item}
-                onToggle={() => updateItem(item.id, { isBought: !item.isBought })}
-                onEdit={() =>
-                  setEditingItem({
-                    id: item.id,
-                    name: item.originalText,
-                    amount: parseAmount(item.quantity),
-                    unit: parseUnit(item.quantity),
-                    category: item.category ?? "",
-                  })
-                }
-                onDelete={() => removeItem(item.id)}
-                isEditing={editingItem?.id === item.id}
-                editingItem={editingItem}
-                onEditingChange={setEditingItem}
-                onSaveEdit={saveEditedItem}
-                onCancelEdit={() => setEditingItem(null)}
-              />
-            ))}
-          </div>
+        {pendingItems.map((item) => (
+          <ItemRow
+            key={item.id}
+            item={item}
+            onToggle={() => updateItem(item.id, { isBought: !item.isBought })}
+            onEdit={() =>
+              setEditingItem({
+                id: item.id,
+                name: item.originalText,
+                amount: parseAmount(item.quantity),
+                unit: parseUnit(item.quantity),
+              })
+            }
+            onDelete={() => removeItem(item.id)}
+            isEditing={editingItem?.id === item.id}
+            editingItem={editingItem}
+            onEditingChange={setEditingItem}
+            onSaveEdit={saveEditedItem}
+            onCancelEdit={() => setEditingItem(null)}
+          />
         ))}
       </section>
 
       <section className={styles.block}>
         <h2>Куплено</h2>
-        {Object.entries(grouped.bought).map(([category, items]) => (
-          <div key={category} className={styles.category}>
-            <h3>{category}</h3>
-            {items.map((item) => (
-              <ItemRow
-                key={item.id}
-                item={item}
-                onToggle={() => updateItem(item.id, { isBought: !item.isBought })}
-                onEdit={() =>
-                  setEditingItem({
-                    id: item.id,
-                    name: item.originalText,
-                    amount: parseAmount(item.quantity),
-                    unit: parseUnit(item.quantity),
-                    category: item.category ?? "",
-                  })
-                }
-                onDelete={() => removeItem(item.id)}
-                isEditing={editingItem?.id === item.id}
-                editingItem={editingItem}
-                onEditingChange={setEditingItem}
-                onSaveEdit={saveEditedItem}
-                onCancelEdit={() => setEditingItem(null)}
-              />
-            ))}
-          </div>
+        {boughtItems.map((item) => (
+          <ItemRow
+            key={item.id}
+            item={item}
+            onToggle={() => updateItem(item.id, { isBought: !item.isBought })}
+            onEdit={() =>
+              setEditingItem({
+                id: item.id,
+                name: item.originalText,
+                amount: parseAmount(item.quantity),
+                unit: parseUnit(item.quantity),
+              })
+            }
+            onDelete={() => removeItem(item.id)}
+            isEditing={editingItem?.id === item.id}
+            editingItem={editingItem}
+            onEditingChange={setEditingItem}
+            onSaveEdit={saveEditedItem}
+            onCancelEdit={() => setEditingItem(null)}
+          />
         ))}
       </section>
     </div>
@@ -419,11 +421,6 @@ function ItemRow({
           onChange={(e) => onEditingChange({ ...editingItem, unit: e.target.value })}
           placeholder="Ед. изм."
         />
-        <input
-          value={editingItem.category}
-          onChange={(e) => onEditingChange({ ...editingItem, category: e.target.value })}
-          placeholder="Категория"
-        />
         <button className={styles.primaryMiniButton} onClick={onSaveEdit}>Сохранить</button>
         <button className={styles.ghostButton} onClick={onCancelEdit}>Отмена</button>
       </div>
@@ -437,9 +434,7 @@ function ItemRow({
       </button>
       <div className={styles.itemContent}>
         <p>{item.originalText}</p>
-        <small>
-          {item.quantity ? `${item.quantity} · ` : ""}source: {item.source.toLowerCase()} · lang: {item.language ?? "und"}
-        </small>
+        {item.quantity ? <small>{item.quantity}</small> : null}
       </div>
       <button className={styles.ghostButton} onClick={onEdit}>Ред.</button>
       <button className={styles.dangerButton} onClick={onDelete}>Удалить</button>

@@ -55,12 +55,26 @@
 
 .activeListActions {
   display: flex;
+  align-items: center;
   gap: 8px;
+}
+
+.renameListForm {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.renameListForm input {
+  border: 1px solid #d4d4d8;
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 0.9rem;
 }
 
 .manualItemForm {
   display: grid;
-  grid-template-columns: 2fr 1fr 1fr 1.5fr auto;
+  grid-template-columns: 2fr 1fr 1fr auto;
   gap: 8px;
 }
 
@@ -121,7 +135,7 @@
 
 .itemEditRow {
   display: grid;
-  grid-template-columns: 2fr 1fr 1fr 1.5fr auto auto;
+  grid-template-columns: 2fr 1fr 1fr auto auto;
   gap: 8px;
   padding: 8px 0;
   border-bottom: 1px solid #f1f5f9;
@@ -190,5 +204,9 @@
 
   .itemEditRow {
     grid-template-columns: 1fr 1fr;
+  }
+
+  .renameListForm {
+    flex-wrap: wrap;
   }
 }
