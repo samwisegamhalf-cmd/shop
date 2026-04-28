@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { FormEvent, KeyboardEvent, useCallback, useEffect, useMemo, useState } from "react";
 
 import type { ShoppingItemDto, ShoppingListDto, WorkspaceSummary } from "@/types/app";
 
@@ -17,6 +17,10 @@ export function ShoppingApp({ workspace, initialLists }: Props) {
   const [lists, setLists] = useState<ShoppingListDto[]>(initialLists);
   const [activeListId, setActiveListId] = useState<string>(initialLists[0]?.id ?? "");
   const [quickInput, setQuickInput] = useState("");
+  const [itemName, setItemName] = useState("");
+  const [itemAmount, setItemAmount] = useState("");
+  const [itemUnit, setItemUnit] = useState("");
+  const [itemCategory, setItemCategory] = useState("");
   const [newListTitle, setNewListTitle] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -83,6 +87,41 @@ export function ShoppingApp({ workspace, initialLists }: Props) {
     await loadLists();
   }
 
+  async function submitStructuredItem(event?: FormEvent<HTMLFormElement>) {
+    event?.preventDefault();
+    if (!activeList || !itemName.trim()) return;
+
+    setLoading(true);
+    setError(null);
+    const quantity = [itemAmount.trim(), itemUnit.trim()].filter(Boolean).join(" ").trim();
+    const res = await fetch(`/api/lists/${activeList.id}/items/batch`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        items: [
+          {
+            originalText: itemName.trim(),
+            normalizedName: itemName.trim().toLowerCase(),
+            quantity: quantity || null,
+            category: itemCategory.trim() || null,
+          },
+        ],
+      }),
+    });
+    setLoading(false);
+
+    if (!res.ok) {
+      setError("Не удалось добавить товар");
+      return;
+    }
+
+    setItemName("");
+    setItemAmount("");
+    setItemUnit("");
+    setItemCategory("");
+    await loadLists();
+  }
+
   async function createList() {
     if (!newListTitle.trim()) return;
     setLoading(true);
@@ -100,6 +139,46 @@ export function ShoppingApp({ workspace, initialLists }: Props) {
 
     setNewListTitle("");
     await loadLists();
+  }
+
+  async function renameActiveList() {
+    if (!activeList) return;
+    const title = window.prompt("Новое название списка", activeList.title);
+    if (!title || !title.trim()) return;
+
+    const res = await fetch(`/api/lists/${activeList.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title: title.trim() }),
+    });
+
+    if (!res.ok) {
+      setError("Не удалось переименовать список");
+      return;
+    }
+    await loadLists();
+  }
+
+  async function deleteActiveList() {
+    if (!activeList) return;
+    const accepted = window.confirm(`Удалить список "${activeList.title}"?`);
+    if (!accepted) return;
+
+    const res = await fetch(`/api/lists/${activeList.id}`, { method: "DELETE" });
+    if (!res.ok) {
+      setError("Не удалось удалить список");
+      return;
+    }
+
+    setActiveListId("");
+    await loadLists();
+  }
+
+  function onQuickInputKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
+    if (event.key === "Enter" && !event.shiftKey) {
+      event.preventDefault();
+      submitQuickInput().catch(() => undefined);
+    }
   }
 
   async function updateItem(itemId: string, payload: Record<string, unknown>) {
@@ -160,10 +239,53 @@ export function ShoppingApp({ workspace, initialLists }: Props) {
         ))}
       </section>
 
+      <section className={styles.activeListActions}>
+        <button
+          className={styles.ghostButton}
+          onClick={renameActiveList}
+          disabled={!activeList}
+        >
+          Переименовать список
+        </button>
+        <button
+          className={styles.dangerButton}
+          onClick={deleteActiveList}
+          disabled={!activeList}
+        >
+          Удалить список
+        </button>
+      </section>
+
+      <form className={styles.manualItemForm} onSubmit={submitStructuredItem}>
+        <input
+          value={itemName}
+          onChange={(e) => setItemName(e.target.value)}
+          placeholder="Товар (Enter - добавить)"
+          required
+        />
+        <input
+          value={itemAmount}
+          onChange={(e) => setItemAmount(e.target.value)}
+          placeholder="Кол-во"
+        />
+        <input
+          value={itemUnit}
+          onChange={(e) => setItemUnit(e.target.value)}
+          placeholder="Ед. изм."
+        />
+        <input
+          value={itemCategory}
+          onChange={(e) => setItemCategory(e.target.value)}
+          placeholder="Категория"
+        />
+        <button type="submit" disabled={loading || !activeList}>Добавить</button>
+      </form>
+
       <section className={styles.inputBox}>
         <textarea
           value={quickInput}
           onChange={(e) => setQuickInput(e.target.value)}
+          onKeyDown={onQuickInputKeyDown}
           placeholder="молоко 2 литра, хлеб, яйца 10 штук"
           rows={2}
         />

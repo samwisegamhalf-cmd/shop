@@ -53,6 +53,32 @@
   padding-bottom: 2px;
 }
 
+.activeListActions {
+  display: flex;
+  gap: 8px;
+}
+
+.manualItemForm {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr 1.5fr auto;
+  gap: 8px;
+}
+
+.manualItemForm input {
+  border: 1px solid #d4d4d8;
+  border-radius: 10px;
+  padding: 10px;
+  font-size: 0.95rem;
+}
+
+.manualItemForm button {
+  border: none;
+  border-radius: 10px;
+  background: #0f172a;
+  color: #ffffff;
+  padding: 10px 14px;
+}
+
 .tab,
 .tabActive {
   border: 1px solid #cbd5e1;
@@ -131,4 +157,10 @@
 .error {
   color: #b91c1c;
   font-size: 0.85rem;
+}
+
+@media (max-width: 720px) {
+  .manualItemForm {
+    grid-template-columns: 1fr 1fr;
+  }
 }
