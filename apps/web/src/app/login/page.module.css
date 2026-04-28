@@ -37,6 +37,18 @@
   color: var(--primary-contrast);
 }
 
+.passwordRow {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+}
+
+.eyeButton {
+  border: 1px solid var(--border);
+  background: var(--surface-muted);
+  color: var(--foreground);
+}
+
 .switch {
   border: 1px solid var(--border);
   background: var(--surface);
@@ -45,5 +57,10 @@
 
 .error {
   color: var(--danger);
+  font-size: 0.85rem;
+}
+
+.info {
+  color: #16a34a;
   font-size: 0.85rem;
 }

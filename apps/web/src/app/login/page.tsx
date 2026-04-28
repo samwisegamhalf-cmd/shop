@@ -10,14 +10,23 @@ export default function LoginPage() {
   const [mode, setMode] = useState<Mode>("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [displayName, setDisplayName] = useState("");
   const [workspaceName, setWorkspaceName] = useState("Семейный список");
+  const [showRecovery, setShowRecovery] = useState(false);
+  const [recoveryEmail, setRecoveryEmail] = useState("");
+  const [recoveryPassword, setRecoveryPassword] = useState("");
+  const [showRecoveryPassword, setShowRecoveryPassword] = useState(false);
+  const [recoveryMasterKey, setRecoveryMasterKey] = useState("");
+  const [showRecoveryMasterKey, setShowRecoveryMasterKey] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [info, setInfo] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError(null);
+    setInfo(null);
     setLoading(true);
 
     const endpoint = mode === "login" ? "/api/auth/login" : "/api/auth/register";
@@ -51,53 +60,169 @@ export default function LoginPage() {
     window.location.href = "/";
   }
 
+  async function handleRecovery(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setError(null);
+    setInfo(null);
+    setLoading(true);
+
+    const res = await fetch("/api/auth/recovery/reset", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email: recoveryEmail,
+        newPassword: recoveryPassword,
+        masterKey: recoveryMasterKey,
+      }),
+    });
+
+    setLoading(false);
+
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      if (data.error === "User not found") {
+        setError("Пользователь с таким email не найден");
+      } else if (data.error === "Invalid recovery key") {
+        setError("Неверный recovery key");
+      } else if (data.error === "Recovery is not configured") {
+        setError("Recovery не настроен на сервере");
+      } else {
+        setError("Не удалось сбросить пароль");
+      }
+      return;
+    }
+
+    setInfo("Пароль обновлен. Войдите с новым паролем.");
+    setShowRecovery(false);
+    setMode("login");
+  }
+
   return (
     <main className={styles.page}>
-      <form onSubmit={handleSubmit} className={styles.form}>
+      <form onSubmit={showRecovery ? handleRecovery : handleSubmit} className={styles.form}>
         <h1>{mode === "login" ? "Вход" : "Регистрация"}</h1>
-        <input
-          type="email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          placeholder="Email"
-          required
-        />
-        <input
-          type="password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          placeholder="Пароль"
-          minLength={6}
-          required
-        />
-        {mode === "register" ? (
+        {showRecovery ? (
           <>
             <input
-              value={displayName}
-              onChange={(e) => setDisplayName(e.target.value)}
-              placeholder="Ваше имя (опционально)"
-            />
-            <input
-              value={workspaceName}
-              onChange={(e) => setWorkspaceName(e.target.value)}
-              placeholder="Название пространства"
+              type="email"
+              value={recoveryEmail}
+              onChange={(e) => setRecoveryEmail(e.target.value)}
+              placeholder="Email аккаунта"
               required
             />
+            <div className={styles.passwordRow}>
+              <input
+                type={showRecoveryPassword ? "text" : "password"}
+                value={recoveryPassword}
+                onChange={(e) => setRecoveryPassword(e.target.value)}
+                placeholder="Новый пароль"
+                minLength={6}
+                required
+              />
+              <button
+                type="button"
+                className={styles.eyeButton}
+                onClick={() => setShowRecoveryPassword((value) => !value)}
+              >
+                {showRecoveryPassword ? "🙈" : "👁"}
+              </button>
+            </div>
+            <div className={styles.passwordRow}>
+              <input
+                type={showRecoveryMasterKey ? "text" : "password"}
+                value={recoveryMasterKey}
+                onChange={(e) => setRecoveryMasterKey(e.target.value)}
+                placeholder="Recovery master key"
+                minLength={8}
+                required
+              />
+              <button
+                type="button"
+                className={styles.eyeButton}
+                onClick={() => setShowRecoveryMasterKey((value) => !value)}
+              >
+                {showRecoveryMasterKey ? "🙈" : "👁"}
+              </button>
+            </div>
           </>
-        ) : null}
+        ) : (
+          <>
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="Email"
+              required
+            />
+            <div className={styles.passwordRow}>
+              <input
+                type={showPassword ? "text" : "password"}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Пароль"
+                minLength={6}
+                required
+              />
+              <button
+                type="button"
+                className={styles.eyeButton}
+                onClick={() => setShowPassword((value) => !value)}
+              >
+                {showPassword ? "🙈" : "👁"}
+              </button>
+            </div>
+            {mode === "register" ? (
+              <>
+                <input
+                  value={displayName}
+                  onChange={(e) => setDisplayName(e.target.value)}
+                  placeholder="Ваше имя (опционально)"
+                />
+                <input
+                  value={workspaceName}
+                  onChange={(e) => setWorkspaceName(e.target.value)}
+                  placeholder="Название пространства"
+                  required
+                />
+              </>
+            ) : null}
+          </>
+        )}
 
         <button disabled={loading} type="submit">
-          {loading ? "..." : mode === "login" ? "Войти" : "Создать аккаунт"}
+          {loading ? "..." : showRecovery ? "Сбросить пароль" : mode === "login" ? "Войти" : "Создать аккаунт"}
         </button>
         {error ? <p className={styles.error}>{error}</p> : null}
+        {info ? <p className={styles.info}>{info}</p> : null}
 
-        <button
-          type="button"
-          className={styles.switch}
-          onClick={() => setMode(mode === "login" ? "register" : "login")}
-        >
-          {mode === "login" ? "Нет аккаунта? Зарегистрироваться" : "Уже есть аккаунт? Войти"}
-        </button>
+        {mode === "login" ? (
+          <button
+            type="button"
+            className={styles.switch}
+            onClick={() => {
+              setShowRecovery((value) => !value);
+              setError(null);
+              setInfo(null);
+            }}
+          >
+            {showRecovery ? "Назад ко входу" : "Забыли пароль?"}
+          </button>
+        ) : null}
+
+        {!showRecovery ? (
+          <button
+            type="button"
+            className={styles.switch}
+            onClick={() => {
+              setMode(mode === "login" ? "register" : "login");
+              setError(null);
+              setInfo(null);
+              setShowRecovery(false);
+            }}
+          >
+            {mode === "login" ? "Нет аккаунта? Зарегистрироваться" : "Уже есть аккаунт? Войти"}
+          </button>
+        ) : null}
       </form>
     </main>
   );
