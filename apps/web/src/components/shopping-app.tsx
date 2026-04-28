@@ -50,6 +50,19 @@ export function ShoppingApp({ workspace, initialLists }: Props) {
   }, [workspace.id, activeListId]);
 
   useEffect(() => {
+    const root = document.documentElement;
+    const savedTheme = localStorage.getItem("shop_theme");
+    if (savedTheme === "light" || savedTheme === "dark") {
+      root.dataset.theme = savedTheme;
+      return;
+    }
+
+    const preferredDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+    const initialTheme = preferredDark ? "dark" : "light";
+    root.dataset.theme = initialTheme;
+  }, []);
+
+  useEffect(() => {
     const timer = setInterval(() => {
       loadLists().catch(() => undefined);
     }, 5000);
@@ -223,6 +236,13 @@ export function ShoppingApp({ workspace, initialLists }: Props) {
     window.location.href = "/login";
   }
 
+  function toggleTheme() {
+    const currentTheme = document.documentElement.dataset.theme === "dark" ? "dark" : "light";
+    const nextTheme = currentTheme === "dark" ? "light" : "dark";
+    document.documentElement.dataset.theme = nextTheme;
+    localStorage.setItem("shop_theme", nextTheme);
+  }
+
   return (
     <div className={styles.page}>
       <header className={styles.header}>
@@ -230,7 +250,12 @@ export function ShoppingApp({ workspace, initialLists }: Props) {
           <h1>{workspace.name}</h1>
           <p>Быстрый список покупок</p>
         </div>
-        <button onClick={logout} className={styles.ghostButton}>Выйти</button>
+        <div className={styles.headerActions}>
+          <button onClick={toggleTheme} className={styles.ghostButton}>
+            Тема
+          </button>
+          <button onClick={logout} className={styles.ghostButton}>Выйти</button>
+        </div>
       </header>
 
       <section className={styles.newListRow}>

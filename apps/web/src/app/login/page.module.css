@@ -8,7 +8,9 @@
 .form {
   width: 100%;
   max-width: 360px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--foreground);
   border-radius: 14px;
   padding: 16px;
   display: flex;
@@ -24,21 +26,24 @@
 }
 
 .form input {
-  border: 1px solid #d4d4d8;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--foreground);
 }
 
 .form button[type="submit"] {
   border: none;
-  background: #0f172a;
-  color: #fff;
+  background: var(--primary);
+  color: var(--primary-contrast);
 }
 
 .switch {
-  border: 1px solid #cbd5e1;
-  background: #fff;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--foreground);
 }
 
 .error {
-  color: #b91c1c;
+  color: var(--danger);
   font-size: 0.85rem;
 }
