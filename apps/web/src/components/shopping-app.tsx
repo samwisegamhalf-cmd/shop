@@ -18,6 +18,8 @@ type EditingState = {
   unit: string;
 };
 
+const UNIT_OPTIONS = ["", "г", "гр", "кг", "мл", "л", "шт", "уп"];
+
 export function ShoppingApp({ workspace, initialLists }: Props) {
   const [lists, setLists] = useState<ShoppingListDto[]>(initialLists);
   const [activeListId, setActiveListId] = useState<string>(initialLists[0]?.id ?? "");
@@ -106,15 +108,32 @@ export function ShoppingApp({ workspace, initialLists }: Props) {
 
     setLoading(true);
     setError(null);
-    const quantity = [itemAmount.trim(), itemUnit.trim()].filter(Boolean).join(" ").trim();
+    let parsedName = itemName.trim();
+    let amount = itemAmount.trim();
+    let unit = itemUnit.trim();
+
+    if (!amount && !unit) {
+      const parsed = parseNameAndQuantity(parsedName);
+      parsedName = parsed.name;
+      amount = parsed.amount;
+      unit = parsed.unit;
+    }
+
+    if (!parsedName) {
+      setLoading(false);
+      setError("Введите название товара");
+      return;
+    }
+
+    const quantity = [amount, unit].filter(Boolean).join(" ").trim();
     const res = await fetch(`/api/lists/${activeList.id}/items/batch`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         items: [
           {
-            originalText: itemName.trim(),
-            normalizedName: itemName.trim().toLowerCase(),
+            originalText: parsedName,
+            normalizedName: parsedName.toLowerCase(),
             quantity: quantity || null,
           },
         ],
@@ -336,8 +355,14 @@ export function ShoppingApp({ workspace, initialLists }: Props) {
         <input
           value={itemUnit}
           onChange={(e) => setItemUnit(e.target.value)}
-          placeholder="Ед. изм."
+          placeholder="Ед. изм. (опц.)"
+          list="unit-options"
         />
+        <datalist id="unit-options">
+          {UNIT_OPTIONS.filter(Boolean).map((unit) => (
+            <option key={unit} value={unit} />
+          ))}
+        </datalist>
         <button type="submit" disabled={loading || !activeList}>Добавить</button>
       </form>
 
@@ -445,7 +470,13 @@ function ItemRow({
           value={editingItem.unit}
           onChange={(e) => onEditingChange({ ...editingItem, unit: e.target.value })}
           placeholder="Ед. изм."
+          list={`unit-options-edit-${editingItem.id}`}
         />
+        <datalist id={`unit-options-edit-${editingItem.id}`}>
+          {Array.from(new Set([...UNIT_OPTIONS, editingItem.unit].filter(Boolean))).map((unit) => (
+            <option key={unit} value={unit} />
+          ))}
+        </datalist>
         <button className={styles.primaryMiniButton} onClick={onSaveEdit}>Сохранить</button>
         <button className={styles.ghostButton} onClick={onCancelEdit}>Отмена</button>
       </div>
@@ -478,4 +509,47 @@ function parseUnit(quantity: string | null): string {
   const amount = parseAmount(quantity);
   if (!amount) return quantity;
   return quantity.replace(amount, "").trim();
+}
+
+function parseNameAndQuantity(raw: string): { name: string; amount: string; unit: string } {
+  const source = raw.trim();
+  const match = source.match(/^(.*?)(?:\s+(\d+[.,]?\d*)\s*([a-zA-Zа-яА-Я.]+))$/);
+  if (!match) {
+    return { name: source, amount: "", unit: "" };
+  }
+
+  const unit = normalizeUnit(match[3] ?? "");
+  if (!unit) {
+    return { name: source, amount: "", unit: "" };
+  }
+
+  return {
+    name: (match[1] ?? "").trim(),
+    amount: (match[2] ?? "").replace(",", "."),
+    unit,
+  };
+}
+
+function normalizeUnit(rawUnit: string): string {
+  const unit = rawUnit.trim().toLowerCase().replace(/\.$/, "");
+  const map: Record<string, string> = {
+    г: "г",
+    гр: "гр",
+    грамм: "гр",
+    грамма: "гр",
+    кг: "кг",
+    килограмм: "кг",
+    килограмма: "кг",
+    мл: "мл",
+    л: "л",
+    литр: "л",
+    литра: "л",
+    шт: "шт",
+    штука: "шт",
+    штук: "шт",
+    уп: "уп",
+    упаковка: "уп",
+    упаковки: "уп",
+  };
+  return map[unit] ?? "";
 }
