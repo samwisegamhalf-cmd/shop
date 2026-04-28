@@ -36,7 +36,15 @@ export default function LoginPage() {
 
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
-      setError(data.error ?? "Ошибка авторизации");
+      if (data.error === "Invalid credentials") {
+        setError("Неверный email или пароль");
+      } else if (data.error === "User already exists") {
+        setError("Пользователь с таким email уже существует");
+      } else if (data.error === "Invalid payload") {
+        setError("Проверьте корректность введенных данных");
+      } else {
+        setError("Ошибка авторизации");
+      }
       return;
     }
 

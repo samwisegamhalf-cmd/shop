@@ -4,7 +4,7 @@ import { createSession, hashPassword } from "@/lib/auth";
 import { db } from "@/lib/db";
 
 const registerSchema = z.object({
-  email: z.email(),
+  email: z.email().trim(),
   password: z.string().min(6),
   displayName: z.string().trim().min(1).max(80).optional(),
   workspaceName: z.string().trim().min(1).max(80),
@@ -18,8 +18,16 @@ export async function POST(request: Request) {
     return Response.json({ error: "Invalid payload" }, { status: 400 });
   }
 
-  const { email, password, displayName, workspaceName } = parsed.data;
-  const existing = await db.user.findUnique({ where: { email } });
+  const { password, displayName, workspaceName } = parsed.data;
+  const email = parsed.data.email.trim().toLowerCase();
+  const existing = await db.user.findFirst({
+    where: {
+      email: {
+        equals: email,
+        mode: "insensitive",
+      },
+    },
+  });
 
   if (existing) {
     return Response.json({ error: "User already exists" }, { status: 409 });
