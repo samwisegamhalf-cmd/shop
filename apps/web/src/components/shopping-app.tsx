@@ -12,6 +12,13 @@ type Props = {
 };
 
 type ItemsByCategory = Record<string, ShoppingItemDto[]>;
+type EditingState = {
+  id: string;
+  name: string;
+  amount: string;
+  unit: string;
+  category: string;
+};
 
 export function ShoppingApp({ workspace, initialLists }: Props) {
   const [lists, setLists] = useState<ShoppingListDto[]>(initialLists);
@@ -24,6 +31,7 @@ export function ShoppingApp({ workspace, initialLists }: Props) {
   const [newListTitle, setNewListTitle] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [editingItem, setEditingItem] = useState<EditingState | null>(null);
 
   const activeList = useMemo(
     () => lists.find((list) => list.id === activeListId) ?? lists[0] ?? null,
@@ -194,6 +202,19 @@ export function ShoppingApp({ workspace, initialLists }: Props) {
     await loadLists();
   }
 
+  async function saveEditedItem() {
+    if (!editingItem) return;
+    const quantity = [editingItem.amount.trim(), editingItem.unit.trim()].filter(Boolean).join(" ").trim();
+
+    await updateItem(editingItem.id, {
+      originalText: editingItem.name.trim(),
+      normalizedName: editingItem.name.trim().toLowerCase(),
+      quantity: quantity || null,
+      category: editingItem.category.trim() || null,
+    });
+    setEditingItem(null);
+  }
+
   async function removeItem(itemId: string) {
     const res = await fetch(`/api/items/${itemId}`, { method: "DELETE" });
     if (!res.ok) {
@@ -304,13 +325,21 @@ export function ShoppingApp({ workspace, initialLists }: Props) {
                 key={item.id}
                 item={item}
                 onToggle={() => updateItem(item.id, { isBought: !item.isBought })}
-                onEdit={() => {
-                  const value = window.prompt("Редактировать строку", item.originalText);
-                  if (value && value.trim()) {
-                    updateItem(item.id, { originalText: value, normalizedName: value.toLowerCase() });
-                  }
-                }}
+                onEdit={() =>
+                  setEditingItem({
+                    id: item.id,
+                    name: item.originalText,
+                    amount: parseAmount(item.quantity),
+                    unit: parseUnit(item.quantity),
+                    category: item.category ?? "",
+                  })
+                }
                 onDelete={() => removeItem(item.id)}
+                isEditing={editingItem?.id === item.id}
+                editingItem={editingItem}
+                onEditingChange={setEditingItem}
+                onSaveEdit={saveEditedItem}
+                onCancelEdit={() => setEditingItem(null)}
               />
             ))}
           </div>
@@ -327,13 +356,21 @@ export function ShoppingApp({ workspace, initialLists }: Props) {
                 key={item.id}
                 item={item}
                 onToggle={() => updateItem(item.id, { isBought: !item.isBought })}
-                onEdit={() => {
-                  const value = window.prompt("Редактировать строку", item.originalText);
-                  if (value && value.trim()) {
-                    updateItem(item.id, { originalText: value, normalizedName: value.toLowerCase() });
-                  }
-                }}
+                onEdit={() =>
+                  setEditingItem({
+                    id: item.id,
+                    name: item.originalText,
+                    amount: parseAmount(item.quantity),
+                    unit: parseUnit(item.quantity),
+                    category: item.category ?? "",
+                  })
+                }
                 onDelete={() => removeItem(item.id)}
+                isEditing={editingItem?.id === item.id}
+                editingItem={editingItem}
+                onEditingChange={setEditingItem}
+                onSaveEdit={saveEditedItem}
+                onCancelEdit={() => setEditingItem(null)}
               />
             ))}
           </div>
@@ -348,12 +385,51 @@ function ItemRow({
   onToggle,
   onEdit,
   onDelete,
+  isEditing,
+  editingItem,
+  onEditingChange,
+  onSaveEdit,
+  onCancelEdit,
 }: {
   item: ShoppingItemDto;
   onToggle: () => void;
   onEdit: () => void;
   onDelete: () => void;
+  isEditing: boolean;
+  editingItem: EditingState | null;
+  onEditingChange: (value: EditingState | null) => void;
+  onSaveEdit: () => void;
+  onCancelEdit: () => void;
 }) {
+  if (isEditing && editingItem) {
+    return (
+      <div className={styles.itemEditRow}>
+        <input
+          value={editingItem.name}
+          onChange={(e) => onEditingChange({ ...editingItem, name: e.target.value })}
+          placeholder="Товар"
+        />
+        <input
+          value={editingItem.amount}
+          onChange={(e) => onEditingChange({ ...editingItem, amount: e.target.value })}
+          placeholder="Кол-во"
+        />
+        <input
+          value={editingItem.unit}
+          onChange={(e) => onEditingChange({ ...editingItem, unit: e.target.value })}
+          placeholder="Ед. изм."
+        />
+        <input
+          value={editingItem.category}
+          onChange={(e) => onEditingChange({ ...editingItem, category: e.target.value })}
+          placeholder="Категория"
+        />
+        <button className={styles.primaryMiniButton} onClick={onSaveEdit}>Сохранить</button>
+        <button className={styles.ghostButton} onClick={onCancelEdit}>Отмена</button>
+      </div>
+    );
+  }
+
   return (
     <div className={styles.itemRow}>
       <button className={styles.checkbox} onClick={onToggle} aria-label="toggle bought">
@@ -369,4 +445,17 @@ function ItemRow({
       <button className={styles.dangerButton} onClick={onDelete}>Удалить</button>
     </div>
   );
+}
+
+function parseAmount(quantity: string | null): string {
+  if (!quantity) return "";
+  const match = quantity.match(/^\s*(\d+[.,]?\d*)/);
+  return match ? match[1] : "";
+}
+
+function parseUnit(quantity: string | null): string {
+  if (!quantity) return "";
+  const amount = parseAmount(quantity);
+  if (!amount) return quantity;
+  return quantity.replace(amount, "").trim();
 }
