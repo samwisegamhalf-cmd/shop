@@ -915,8 +915,27 @@ function ItemRow({
   onDelete: () => void;
 }) {
   return (
-    <div className={item.isBought ? styles.itemRowBought : styles.itemRow}>
-      <button className={styles.checkbox} onClick={onToggle} aria-label="Переключить статус">
+    <div
+      className={item.isBought ? styles.itemRowBought : styles.itemRow}
+      onClick={onToggle}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          onToggle();
+        }
+      }}
+      aria-label={`Toggle item ${item.originalText}`}
+    >
+      <button
+        className={styles.checkbox}
+        onClick={(event) => {
+          event.stopPropagation();
+          onToggle();
+        }}
+        aria-label="Toggle status"
+      >
         {item.isBought ? <CheckIcon /> : null}
       </button>
 
@@ -930,22 +949,37 @@ function ItemRow({
           <div className={styles.itemActions}>
             <button
               className={isFavorite ? styles.iconFavoriteActive : styles.iconTextButton}
-              onClick={() =>
+              onClick={(event) => {
+                event.stopPropagation();
                 onToggleFavorite({
                   id: "",
                   label: item.originalText,
                   canonicalName: canonicalizeItemName(item.originalText),
                   quantity: item.quantity,
-                })
-              }
-              aria-label="Избранное"
+                });
+              }}
+              aria-label="Favorite"
             >
               <StarIcon />
             </button>
-            <button className={styles.iconTextButton} onClick={onEdit} aria-label="Изменить">
+            <button
+              className={styles.iconTextButton}
+              onClick={(event) => {
+                event.stopPropagation();
+                onEdit();
+              }}
+              aria-label="Edit"
+            >
               <EditIcon />
             </button>
-            <button className={styles.iconDangerButton} onClick={onDelete} aria-label="Удалить">
+            <button
+              className={styles.iconDangerButton}
+              onClick={(event) => {
+                event.stopPropagation();
+                onDelete();
+              }}
+              aria-label="Delete"
+            >
               <TrashIcon />
             </button>
           </div>

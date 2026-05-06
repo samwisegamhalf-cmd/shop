@@ -592,6 +592,7 @@
   gap: 12px;
   padding: 16px 14px;
   border-bottom: 1px solid var(--border);
+  cursor: pointer;
 }
 
 .itemRowBought {
@@ -601,6 +602,7 @@
   padding: 14px;
   border-bottom: 1px solid color-mix(in srgb, var(--border) 88%, transparent);
   background: linear-gradient(180deg, color-mix(in srgb, var(--surface-muted) 44%, transparent) 0%, transparent 100%);
+  cursor: pointer;
 }
 
 .itemRow:last-child {
