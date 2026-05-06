@@ -35,8 +35,8 @@ export default async function Home() {
     orderBy: [{ updatedAt: "desc" }, { label: "asc" }],
   });
 
-  const preferredListId = lists.some((list) => list.id === session.user.activeListId)
-    ? session.user.activeListId
+  const preferredListId: string = lists.some((list) => list.id === session.user.activeListId)
+    ? session.user.activeListId ?? ""
     : lists[0]?.id ?? "";
 
   return (
