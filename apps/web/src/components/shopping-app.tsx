@@ -11,27 +11,16 @@ type Props = {
   initialLists: ShoppingListDto[];
 };
 
-type AppTab = "list" | "categories" | "history";
+type AppTab = "list" | "history";
 
 type EditingState = {
   id: string;
   name: string;
   amount: string;
   unit: string;
-  category: string;
 };
 
 const UNIT_OPTIONS = ["", "г", "гр", "кг", "мл", "л", "шт", "уп"];
-const CATEGORY_OPTIONS = [
-  "Молочное",
-  "Хлеб и выпечка",
-  "Овощи и фрукты",
-  "Мясо и рыба",
-  "Бакалея",
-  "Напитки",
-  "Бытовая химия",
-  "Другое",
-];
 
 export function ShoppingApp({ workspace, initialLists }: Props) {
   const [lists, setLists] = useState<ShoppingListDto[]>(initialLists);
@@ -40,7 +29,6 @@ export function ShoppingApp({ workspace, initialLists }: Props) {
   const [itemName, setItemName] = useState("");
   const [itemAmount, setItemAmount] = useState("");
   const [itemUnit, setItemUnit] = useState("");
-  const [itemCategory, setItemCategory] = useState("");
   const [newListTitle, setNewListTitle] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -85,17 +73,6 @@ export function ShoppingApp({ workspace, initialLists }: Props) {
   const allItems = useMemo(() => activeList?.items ?? [], [activeList]);
   const pendingItems = useMemo(() => allItems.filter((item) => !item.isBought), [allItems]);
   const boughtItems = useMemo(() => allItems.filter((item) => item.isBought), [allItems]);
-  const groupedPending = useMemo(() => groupByCategory(pendingItems), [pendingItems]);
-
-  const categoryStats = useMemo(() => {
-    const grouped = groupByCategory(allItems);
-    return grouped.map(({ category, items }) => {
-      const activeCount = items.filter((item) => !item.isBought).length;
-      const boughtCount = items.length - activeCount;
-      const progress = items.length === 0 ? 0 : Math.round((boughtCount / items.length) * 100);
-      return { category, activeCount, boughtCount, progress };
-    });
-  }, [allItems]);
 
   const historyGroups = useMemo(() => {
     const map = new Map<string, ShoppingItemDto[]>();
@@ -127,7 +104,6 @@ export function ShoppingApp({ workspace, initialLists }: Props) {
       unit = parsed.unit;
     }
 
-    const category = itemCategory || inferCategory(parsedName);
     const quantity = [amount, unit].filter(Boolean).join(" ").trim();
 
     const res = await fetch(`/api/lists/${activeList.id}/items/batch`, {
@@ -139,7 +115,7 @@ export function ShoppingApp({ workspace, initialLists }: Props) {
             originalText: parsedName,
             normalizedName: parsedName.toLowerCase(),
             quantity: quantity || null,
-            category,
+            category: null,
           },
         ],
       }),
@@ -154,7 +130,6 @@ export function ShoppingApp({ workspace, initialLists }: Props) {
     setItemName("");
     setItemAmount("");
     setItemUnit("");
-    setItemCategory("");
     await loadLists();
   }
 
@@ -229,7 +204,7 @@ export function ShoppingApp({ workspace, initialLists }: Props) {
       originalText: editingItem.name.trim(),
       normalizedName: editingItem.name.trim().toLowerCase(),
       quantity: quantity || null,
-      category: editingItem.category || null,
+      category: null,
     });
     setEditingItem(null);
   }
@@ -250,185 +225,227 @@ export function ShoppingApp({ workspace, initialLists }: Props) {
     <div className={styles.desktopShell}>
       <div className={styles.phoneFrame}>
         <header className={styles.header}>
-          <div>
+          <div className={styles.headerCopy}>
+            <span className={styles.eyebrow}>{workspace.name}</span>
             <h1>Список покупок</h1>
-            <p>{allItems.length} товаров · {boughtItems.length} куплено</p>
+            <p>Простой рабочий экран для общих покупок на телефоне, ноутбуке и большом мониторе.</p>
           </div>
           <div className={styles.headerActions}>
-            <button onClick={toggleTheme} className={styles.iconButton}>◐</button>
-            <button onClick={logout} className={styles.iconButton}>⎋</button>
+            <button onClick={toggleTheme} className={styles.iconButton} aria-label="Переключить тему">◐</button>
+            <button onClick={logout} className={styles.iconButton} aria-label="Выйти">⎋</button>
           </div>
         </header>
 
-        <section className={styles.listChips}>
-          {lists.map((list) => (
-            <button
-              key={list.id}
-              className={list.id === activeList?.id ? styles.tabActive : styles.tab}
-              onClick={() => setActiveListId(list.id)}
-            >
-              {list.title}
-            </button>
-          ))}
+        <section className={styles.statsRow}>
+          <article className={styles.statCard}>
+            <span>Всего</span>
+            <strong>{allItems.length}</strong>
+          </article>
+          <article className={styles.statCard}>
+            <span>В покупке</span>
+            <strong>{pendingItems.length}</strong>
+          </article>
+          <article className={styles.statCard}>
+            <span>Готово</span>
+            <strong>{boughtItems.length}</strong>
+          </article>
         </section>
 
-        <section className={styles.topActions}>
-          <input
-            value={newListTitle}
-            onChange={(e) => setNewListTitle(e.target.value)}
-            placeholder="Новый список"
-          />
-          <button onClick={createList} disabled={loading}>Создать</button>
-          {!isRenamingList ? (
-            <button className={styles.ghostButton} onClick={() => {
-              if (!activeList) return;
-              setRenameListTitle(activeList.title);
-              setIsRenamingList(true);
-            }}>
-              Переименовать
-            </button>
-          ) : null}
-          <button className={styles.dangerButton} onClick={deleteActiveList} disabled={!activeList}>Удалить</button>
-        </section>
+        <div className={styles.appGrid}>
+          <aside className={styles.sidebar}>
+            <section className={styles.panel}>
+              <div className={styles.panelHeader}>
+                <div>
+                  <span className={styles.panelKicker}>Списки</span>
+                  <h2>Переключение без лишних действий</h2>
+                </div>
+              </div>
 
-        {isRenamingList ? (
-          <form
-            className={styles.renameRow}
-            onSubmit={(event) => {
-              event.preventDefault();
-              renameActiveList().catch(() => undefined);
-            }}
-          >
-            <input
-              value={renameListTitle}
-              onChange={(e) => setRenameListTitle(e.target.value)}
-              placeholder="Название списка"
-              required
-            />
-            <button className={styles.primaryMiniButton} type="submit">Сохранить</button>
-            <button type="button" className={styles.ghostButton} onClick={() => setIsRenamingList(false)}>Отмена</button>
-          </form>
-        ) : null}
+              <section className={styles.listChips}>
+                {lists.map((list) => (
+                  <button
+                    key={list.id}
+                    className={list.id === activeList?.id ? styles.tabActive : styles.tab}
+                    onClick={() => setActiveListId(list.id)}
+                  >
+                    {list.title}
+                  </button>
+                ))}
+              </section>
 
-        <main className={styles.contentArea}>
-          {activeTab === "list" ? (
-            <>
-              {groupedPending.map(({ category, items }) => (
-                <section key={`pending-${category}`} className={styles.categorySection}>
-                  <div className={styles.categoryHeader}>
-                    <span>{category}</span>
-                    <small>{items.length}</small>
+              <div className={styles.topActions}>
+                <input
+                  value={newListTitle}
+                  onChange={(e) => setNewListTitle(e.target.value)}
+                  placeholder="Новый список"
+                />
+                <button onClick={createList} disabled={loading}>Создать</button>
+              </div>
+
+              <div className={styles.inlineActions}>
+                {!isRenamingList ? (
+                  <button
+                    className={styles.ghostButton}
+                    onClick={() => {
+                      if (!activeList) return;
+                      setRenameListTitle(activeList.title);
+                      setIsRenamingList(true);
+                    }}
+                  >
+                    Переименовать
+                  </button>
+                ) : null}
+                <button className={styles.dangerButton} onClick={deleteActiveList} disabled={!activeList}>Удалить</button>
+              </div>
+
+              {isRenamingList ? (
+                <form
+                  className={styles.renameRow}
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    renameActiveList().catch(() => undefined);
+                  }}
+                >
+                  <input
+                    value={renameListTitle}
+                    onChange={(e) => setRenameListTitle(e.target.value)}
+                    placeholder="Название списка"
+                    required
+                  />
+                  <button className={styles.primaryMiniButton} type="submit">Сохранить</button>
+                  <button type="button" className={styles.ghostButton} onClick={() => setIsRenamingList(false)}>Отмена</button>
+                </form>
+              ) : null}
+            </section>
+
+            <section className={styles.panel}>
+              <div className={styles.panelHeader}>
+                <div>
+                  <span className={styles.panelKicker}>Добавить</span>
+                  <h2>Новые покупки в одном компактном блоке</h2>
+                </div>
+              </div>
+
+              <form className={styles.composer} onSubmit={submitStructuredItem}>
+                <input
+                  value={itemName}
+                  onChange={(e) => setItemName(e.target.value)}
+                  placeholder="Молоко 2 л, хлеб, яйца..."
+                  required
+                />
+                <div className={styles.composerRow}>
+                  <input value={itemAmount} onChange={(e) => setItemAmount(e.target.value)} placeholder="Кол-во" />
+                  <select value={itemUnit} onChange={(e) => setItemUnit(e.target.value)}>
+                    {UNIT_OPTIONS.map((unit) => (
+                      <option key={unit} value={unit}>{unit || "Ед."}</option>
+                    ))}
+                  </select>
+                  <button type="submit" disabled={loading || !activeList}>Добавить</button>
+                </div>
+              </form>
+            </section>
+          </aside>
+
+          <main className={styles.contentArea}>
+            <div className={styles.contentHeader}>
+              <div>
+                <span className={styles.panelKicker}>Активный экран</span>
+                <h2>{activeList?.title ?? "Выбери список"}</h2>
+              </div>
+              <nav className={styles.bottomNav}>
+                <button className={activeTab === "list" ? styles.bottomActive : styles.bottomItem} onClick={() => setActiveTab("list")}>Список</button>
+                <button className={activeTab === "history" ? styles.bottomActive : styles.bottomItem} onClick={() => setActiveTab("history")}>История</button>
+              </nav>
+            </div>
+
+            {activeTab === "list" ? (
+              <div className={styles.listLayout}>
+                <section className={styles.panel}>
+                  <div className={styles.sectionHeading}>
+                    <h3>Нужно купить</h3>
+                    <span>{pendingItems.length}</span>
                   </div>
                   <div className={styles.card}>
-                    {items.map((item) => (
-                      <ItemRow
-                        key={item.id}
-                        item={item}
-                        onToggle={() => updateItem(item.id, { isBought: !item.isBought })}
-                        onEdit={() =>
-                          setEditingItem({
-                            id: item.id,
-                            name: item.originalText,
-                            amount: parseAmount(item.quantity),
-                            unit: parseUnit(item.quantity),
-                            category: item.category || inferCategory(item.originalText),
-                          })
-                        }
-                        onDelete={() => removeItem(item.id)}
-                      />
-                    ))}
+                    {pendingItems.length ? (
+                      pendingItems.map((item) => (
+                        <ItemRow
+                          key={item.id}
+                          item={item}
+                          onToggle={() => updateItem(item.id, { isBought: !item.isBought })}
+                          onEdit={() =>
+                            setEditingItem({
+                              id: item.id,
+                              name: item.originalText,
+                              amount: parseAmount(item.quantity),
+                              unit: parseUnit(item.quantity),
+                            })
+                          }
+                          onDelete={() => removeItem(item.id)}
+                        />
+                      ))
+                    ) : (
+                      <EmptyState text="Список пуст. Добавь первую покупку." />
+                    )}
                   </div>
                 </section>
-              ))}
 
-              <section className={styles.categorySection}>
-                <div className={styles.sectionTitle}>Куплено</div>
-                <div className={styles.card}>
-                  {boughtItems.map((item) => (
-                    <ItemRow
-                      key={item.id}
-                      item={item}
-                      onToggle={() => updateItem(item.id, { isBought: !item.isBought })}
-                      onEdit={() =>
-                        setEditingItem({
-                          id: item.id,
-                          name: item.originalText,
-                          amount: parseAmount(item.quantity),
-                          unit: parseUnit(item.quantity),
-                          category: item.category || inferCategory(item.originalText),
-                        })
-                      }
-                      onDelete={() => removeItem(item.id)}
-                    />
-                  ))}
-                </div>
-              </section>
-            </>
-          ) : null}
-
-          {activeTab === "categories" ? (
-            <section className={styles.grid}>
-              {categoryStats.map((entry) => (
-                <article key={entry.category} className={styles.categoryCard}>
-                  <h3>{entry.category}</h3>
-                  <p>{entry.activeCount} активных{entry.boughtCount ? `, ${entry.boughtCount} куплено` : ""}</p>
-                  <div className={styles.progressTrack}>
-                    <span className={styles.progressFill} style={{ width: `${entry.progress}%` }} />
+                <section className={styles.panel}>
+                  <div className={styles.sectionHeading}>
+                    <h3>Уже куплено</h3>
+                    <span>{boughtItems.length}</span>
                   </div>
-                </article>
-              ))}
-            </section>
-          ) : null}
-
-          {activeTab === "history" ? (
-            <section className={styles.historyWrap}>
-              {historyGroups.map((group) => (
-                <div key={group.date} className={styles.historyDay}>
-                  <h4>{group.date}</h4>
                   <div className={styles.card}>
-                    {group.items.map((item) => (
-                      <div key={item.id} className={styles.historyRow}>
-                        <div>
-                          <p>{item.originalText}</p>
-                          {item.quantity ? <small>{item.quantity}</small> : null}
-                        </div>
-                        <span className={styles.sourceBadge}>{formatSource(item.source)}</span>
-                      </div>
-                    ))}
+                    {boughtItems.length ? (
+                      boughtItems.map((item) => (
+                        <ItemRow
+                          key={item.id}
+                          item={item}
+                          onToggle={() => updateItem(item.id, { isBought: !item.isBought })}
+                          onEdit={() =>
+                            setEditingItem({
+                              id: item.id,
+                              name: item.originalText,
+                              amount: parseAmount(item.quantity),
+                              unit: parseUnit(item.quantity),
+                            })
+                          }
+                          onDelete={() => removeItem(item.id)}
+                        />
+                      ))
+                    ) : (
+                      <EmptyState text="Купленные товары пока не появились." />
+                    )}
                   </div>
-                </div>
-              ))}
-            </section>
-          ) : null}
-        </main>
+                </section>
+              </div>
+            ) : null}
 
-        <form className={styles.composer} onSubmit={submitStructuredItem}>
-          <input
-            value={itemName}
-            onChange={(e) => setItemName(e.target.value)}
-            placeholder="Молоко 2 л, хлеб, яйца..."
-            required
-          />
-          <input value={itemAmount} onChange={(e) => setItemAmount(e.target.value)} placeholder="Кол-во" />
-          <select value={itemUnit} onChange={(e) => setItemUnit(e.target.value)}>
-            {UNIT_OPTIONS.map((unit) => (
-              <option key={unit} value={unit}>{unit || "Ед."}</option>
-            ))}
-          </select>
-          <select value={itemCategory} onChange={(e) => setItemCategory(e.target.value)}>
-            <option value="">Категория</option>
-            {CATEGORY_OPTIONS.map((category) => (
-              <option key={category} value={category}>{category}</option>
-            ))}
-          </select>
-          <button type="submit" disabled={loading || !activeList}>→</button>
-        </form>
-
-        <nav className={styles.bottomNav}>
-          <button className={activeTab === "list" ? styles.bottomActive : styles.bottomItem} onClick={() => setActiveTab("list")}>Список</button>
-          <button className={activeTab === "categories" ? styles.bottomActive : styles.bottomItem} onClick={() => setActiveTab("categories")}>Категории</button>
-          <button className={activeTab === "history" ? styles.bottomActive : styles.bottomItem} onClick={() => setActiveTab("history")}>История</button>
-        </nav>
+            {activeTab === "history" ? (
+              <section className={styles.historyWrap}>
+                {historyGroups.length ? (
+                  historyGroups.map((group) => (
+                    <div key={group.date} className={styles.historyDay}>
+                      <h4>{group.date}</h4>
+                      <div className={styles.card}>
+                        {group.items.map((item) => (
+                          <div key={item.id} className={styles.historyRow}>
+                            <div>
+                              <p>{item.originalText}</p>
+                              {item.quantity ? <small>{item.quantity}</small> : null}
+                            </div>
+                            <span className={styles.sourceBadge}>{formatSource(item.source)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <EmptyState text="История появится, когда в списке будут изменения." />
+                )}
+              </section>
+            ) : null}
+          </main>
+        </div>
 
         {editingItem ? (
           <div className={styles.sheetOverlay} onClick={() => setEditingItem(null)}>
@@ -444,12 +461,6 @@ export function ShoppingApp({ workspace, initialLists }: Props) {
                   <option key={unit} value={unit}>{unit || "Выберите"}</option>
                 ))}
               </select>
-              <label>Категория</label>
-              <select value={editingItem.category} onChange={(e) => setEditingItem({ ...editingItem, category: e.target.value })}>
-                {CATEGORY_OPTIONS.map((category) => (
-                  <option key={category} value={category}>{category}</option>
-                ))}
-              </select>
               <div className={styles.sheetActions}>
                 <button
                   className={styles.dangerButton}
@@ -460,8 +471,8 @@ export function ShoppingApp({ workspace, initialLists }: Props) {
                 >
                   Удалить
                 </button>
-                <button className={styles.ghostButton} onClick={() => setEditingItem(null)}>Отмена</button>
-                <button className={styles.primaryMiniButton} onClick={saveEditedItem}>Сохранить</button>
+                <button type="button" className={styles.ghostButton} onClick={() => setEditingItem(null)}>Отмена</button>
+                <button type="button" className={styles.primaryMiniButton} onClick={saveEditedItem}>Сохранить</button>
               </div>
             </div>
           </div>
@@ -471,6 +482,10 @@ export function ShoppingApp({ workspace, initialLists }: Props) {
       </div>
     </div>
   );
+}
+
+function EmptyState({ text }: { text: string }) {
+  return <div className={styles.emptyState}>{text}</div>;
 }
 
 function ItemRow({
@@ -486,40 +501,19 @@ function ItemRow({
 }) {
   return (
     <div className={styles.itemRow}>
-      <button className={styles.checkbox} onClick={onToggle} aria-label="toggle bought">
+      <button className={styles.checkbox} onClick={onToggle} aria-label="Переключить статус">
         {item.isBought ? "✓" : ""}
       </button>
       <div className={styles.itemContent}>
         <p>{item.originalText}</p>
         {item.quantity ? <small>{item.quantity}</small> : null}
       </div>
-      <button className={styles.ghostButton} onClick={onEdit}>Ред.</button>
-      <button className={styles.dangerButton} onClick={onDelete}>Удалить</button>
+      <div className={styles.itemActions}>
+        <button className={styles.ghostButton} onClick={onEdit}>Изм.</button>
+        <button className={styles.dangerButton} onClick={onDelete}>Удалить</button>
+      </div>
     </div>
   );
-}
-
-function groupByCategory(items: ShoppingItemDto[]) {
-  const map = new Map<string, ShoppingItemDto[]>();
-  items.forEach((item) => {
-    const category = item.category || inferCategory(item.originalText);
-    const current = map.get(category) ?? [];
-    current.push(item);
-    map.set(category, current);
-  });
-  return Array.from(map.entries()).map(([category, groupedItems]) => ({ category, items: groupedItems }));
-}
-
-function inferCategory(name: string): string {
-  const value = name.toLowerCase();
-  if (/молок|кефир|сыр|йогурт|сметан|творог|масло/.test(value)) return "Молочное";
-  if (/хлеб|батон|багет|булк|лаваш|выпечк/.test(value)) return "Хлеб и выпечка";
-  if (/помидор|огурц|яблок|банан|апельсин|овощ|фрукт|зелень/.test(value)) return "Овощи и фрукты";
-  if (/куриц|индейк|говядин|свинин|рыб|фарш|мяс/.test(value)) return "Мясо и рыба";
-  if (/гречк|рис|макарон|мук|сахар|соль|бакале/.test(value)) return "Бакалея";
-  if (/сок|вода|чай|кофе|напит/.test(value)) return "Напитки";
-  if (/порошок|гель|мыл|хим|шампун/.test(value)) return "Бытовая химия";
-  return "Другое";
 }
 
 function formatDateKey(isoDate: string): string {

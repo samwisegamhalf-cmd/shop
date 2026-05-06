@@ -1,27 +1,37 @@
 :root {
-  --background: #f8fafc;
-  --foreground: #0f172a;
-  --surface: #ffffff;
-  --surface-muted: #f1f5f9;
-  --border: #dbe3ef;
-  --muted: #64748b;
-  --primary: #0f172a;
-  --primary-contrast: #ffffff;
-  --danger: #b91c1c;
-  --danger-border: #fecaca;
+  --background: #f4f0e8;
+  --foreground: #182126;
+  --surface: #fffaf4;
+  --surface-muted: #efe5d7;
+  --border: rgba(24, 33, 38, 0.1);
+  --border-strong: rgba(24, 33, 38, 0.18);
+  --muted: #6b756f;
+  --accent: #1f8a78;
+  --accent-strong: #165f53;
+  --accent-contrast: #f6fffb;
+  --danger: #b44338;
+  --danger-border: rgba(180, 67, 56, 0.28);
+  --shadow-sm: 0 14px 28px rgba(28, 39, 43, 0.08);
+  --shadow-md: 0 20px 44px rgba(28, 39, 43, 0.14);
+  --shadow-lg: 0 26px 70px rgba(28, 39, 43, 0.18);
 }
 
 [data-theme="dark"] {
-  --background: #020617;
-  --foreground: #e2e8f0;
-  --surface: #0b1220;
-  --surface-muted: #111827;
-  --border: #243244;
-  --muted: #93a4bc;
-  --primary: #1d4ed8;
-  --primary-contrast: #ffffff;
-  --danger: #f87171;
-  --danger-border: #7f1d1d;
+  --background: #101719;
+  --foreground: #edf3ef;
+  --surface: #172123;
+  --surface-muted: #1d2a2d;
+  --border: rgba(237, 243, 239, 0.1);
+  --border-strong: rgba(237, 243, 239, 0.16);
+  --muted: #9bada4;
+  --accent: #73d6be;
+  --accent-strong: #a2f0db;
+  --accent-contrast: #0f1817;
+  --danger: #ff8b7e;
+  --danger-border: rgba(255, 139, 126, 0.26);
+  --shadow-sm: 0 18px 34px rgba(0, 0, 0, 0.2);
+  --shadow-md: 0 24px 54px rgba(0, 0, 0, 0.28);
+  --shadow-lg: 0 30px 80px rgba(0, 0, 0, 0.36);
 }
 
 [data-theme="light"] {
@@ -48,16 +58,28 @@ body {
   flex-direction: column;
   color: var(--foreground);
   background: var(--background);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: "Aptos", "Segoe UI Variable", "Trebuchet MS", sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  transition: background-color 0.15s ease, color 0.15s ease;
+  text-rendering: optimizeLegibility;
+  transition: background-color 0.18s ease, color 0.18s ease;
 }
 
 * {
   box-sizing: border-box;
   padding: 0;
   margin: 0;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
 }
 
 a {
