@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import { getAuthUser } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { canonicalizeItemName } from "@/lib/item-normalization";
 
 const updateItemSchema = z.object({
   originalText: z.string().trim().min(1).optional(),
@@ -59,6 +60,11 @@ export async function PATCH(request: Request, context: RouteContext<"/api/items/
     data: {
       ...parsed.data,
       normalizedName: parsed.data.normalizedName?.toLowerCase(),
+      canonicalName: parsed.data.originalText
+        ? canonicalizeItemName(parsed.data.originalText)
+        : parsed.data.normalizedName
+          ? canonicalizeItemName(parsed.data.normalizedName)
+          : item.canonicalName,
       boughtAt: boughtChanged ? (parsed.data.isBought ? new Date() : null) : item.boughtAt,
     },
   });

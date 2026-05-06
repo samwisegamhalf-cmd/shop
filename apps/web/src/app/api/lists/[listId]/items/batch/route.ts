@@ -3,6 +3,11 @@ import { z } from "zod";
 
 import { getAuthUser } from "@/lib/auth";
 import { db } from "@/lib/db";
+import {
+  canonicalizeItemName,
+  choosePreferredItemLabel,
+  mergeQuantities,
+} from "@/lib/item-normalization";
 import { parseQuickInput } from "@/lib/parseQuickInput";
 
 const sourceEnum = z.enum([
@@ -21,6 +26,7 @@ const payloadSchema = z.object({
       z.object({
         originalText: z.string().trim().min(1),
         normalizedName: z.string().trim().min(1),
+        canonicalName: z.string().trim().min(1).optional(),
         quantity: z.string().trim().min(1).optional().nullable(),
         source: sourceEnum.optional(),
         language: z.string().trim().min(1).optional().nullable(),
@@ -65,6 +71,7 @@ export async function POST(
   const explicitItems = (parsed.data.items ?? []).map((item) => ({
     originalText: item.originalText,
     normalizedName: item.normalizedName.toLowerCase(),
+    canonicalName: item.canonicalName?.trim() || canonicalizeItemName(item.originalText),
     quantity: item.quantity ?? null,
     source: item.source ?? ItemSource.MANUAL,
     language: item.language ?? "und",
@@ -76,22 +83,78 @@ export async function POST(
     return Response.json({ error: "No items to create" }, { status: 400 });
   }
 
-  const createdItems = await db.$transaction(
-    itemsToCreate.map((item) =>
-      db.shoppingItem.create({
+  const result = await db.$transaction(async (tx) => {
+    const createdItems: unknown[] = [];
+    const mergedItems: Array<{
+      id: string;
+      title: string;
+      quantity: string | null;
+      mergedFrom: string;
+    }> = [];
+
+    for (const item of itemsToCreate) {
+      const canonicalName = item.canonicalName || canonicalizeItemName(item.originalText);
+
+      const existing = canonicalName
+        ? await tx.shoppingItem.findFirst({
+            where: {
+              listId,
+              isBought: false,
+              canonicalName,
+            },
+            orderBy: { updatedAt: "desc" },
+          })
+        : null;
+
+      if (existing) {
+        const preferredLabel = choosePreferredItemLabel(existing.originalText, item.originalText);
+        const merged = await tx.shoppingItem.update({
+          where: { id: existing.id },
+          data: {
+            originalText: preferredLabel,
+            normalizedName: preferredLabel.toLowerCase(),
+            canonicalName,
+            quantity: mergeQuantities(existing.quantity, item.quantity),
+            source: existing.source,
+            language: existing.language ?? item.language,
+            confidence: Math.max(existing.confidence ?? 0, item.confidence ?? 0),
+          },
+        });
+
+        mergedItems.push({
+          id: merged.id,
+          title: merged.originalText,
+          quantity: merged.quantity,
+          mergedFrom: item.originalText,
+        });
+        continue;
+      }
+
+      const created = await tx.shoppingItem.create({
         data: {
           listId,
           createdById: user.id,
           originalText: item.originalText,
           normalizedName: item.normalizedName,
+          canonicalName,
           quantity: item.quantity,
           source: item.source,
           language: item.language,
           confidence: item.confidence,
         },
-      }),
-    ),
-  );
+      });
 
-  return Response.json({ items: createdItems }, { status: 201 });
+      createdItems.push(created);
+    }
+
+    return { createdItems, mergedItems };
+  });
+
+  return Response.json(
+    {
+      items: result.createdItems,
+      mergedItems: result.mergedItems,
+    },
+    { status: 201 },
+  );
 }

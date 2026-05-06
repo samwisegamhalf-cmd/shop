@@ -80,6 +80,7 @@ model ShoppingItem {
   createdById     String?
   originalText    String
   normalizedName  String
+  canonicalName   String       @default("")
   quantity        String?
   isBought        Boolean      @default(false)
   position        Int          @default(0)

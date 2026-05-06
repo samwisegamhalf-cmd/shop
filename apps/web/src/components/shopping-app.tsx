@@ -1,8 +1,10 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { FormEvent, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 
 import type { ShoppingItemDto, ShoppingListDto, WorkspaceSummary } from "@/types/app";
+
+import { canonicalizeItemName } from "@/lib/item-normalization";
 
 import styles from "./shopping-app.module.css";
 
@@ -11,8 +13,6 @@ type Props = {
   initialLists: ShoppingListDto[];
 };
 
-type AppTab = "list" | "history";
-
 type EditingState = {
   id: string;
   name: string;
@@ -20,12 +20,32 @@ type EditingState = {
   unit: string;
 };
 
-const UNIT_OPTIONS = ["", "г", "гр", "кг", "мл", "л", "шт", "уп"];
+type MergeNotice = {
+  id: string;
+  title: string;
+  quantity: string | null;
+  mergedFrom: string;
+};
+
+type SelectOption = {
+  value: string;
+  label: string;
+};
+
+const UNIT_OPTIONS: SelectOption[] = [
+  { value: "", label: "Ед." },
+  { value: "г", label: "г" },
+  { value: "гр", label: "гр" },
+  { value: "кг", label: "кг" },
+  { value: "мл", label: "мл" },
+  { value: "л", label: "л" },
+  { value: "шт", label: "шт" },
+  { value: "уп", label: "уп" },
+];
 
 export function ShoppingApp({ workspace, initialLists }: Props) {
   const [lists, setLists] = useState<ShoppingListDto[]>(initialLists);
   const [activeListId, setActiveListId] = useState<string>(initialLists[0]?.id ?? "");
-  const [activeTab, setActiveTab] = useState<AppTab>("list");
   const [itemName, setItemName] = useState("");
   const [itemAmount, setItemAmount] = useState("");
   const [itemUnit, setItemUnit] = useState("");
@@ -35,6 +55,7 @@ export function ShoppingApp({ workspace, initialLists }: Props) {
   const [editingItem, setEditingItem] = useState<EditingState | null>(null);
   const [isRenamingList, setIsRenamingList] = useState(false);
   const [renameListTitle, setRenameListTitle] = useState("");
+  const [mergeNotices, setMergeNotices] = useState<MergeNotice[]>([]);
 
   const activeList = useMemo(
     () => lists.find((list) => list.id === activeListId) ?? lists[0] ?? null,
@@ -46,6 +67,7 @@ export function ShoppingApp({ workspace, initialLists }: Props) {
     if (!res.ok) {
       throw new Error("Cannot load lists");
     }
+
     const data = await res.json();
     setLists(data.lists);
     if (!activeListId && data.lists[0]?.id) {
@@ -93,6 +115,7 @@ export function ShoppingApp({ workspace, initialLists }: Props) {
 
     setLoading(true);
     setError(null);
+
     let parsedName = itemName.trim();
     let amount = itemAmount.trim();
     let unit = itemUnit.trim();
@@ -114,11 +137,13 @@ export function ShoppingApp({ workspace, initialLists }: Props) {
           {
             originalText: parsedName,
             normalizedName: parsedName.toLowerCase(),
+            canonicalName: canonicalizeItemName(parsedName),
             quantity: quantity || null,
           },
         ],
       }),
     });
+
     setLoading(false);
 
     if (!res.ok) {
@@ -126,6 +151,8 @@ export function ShoppingApp({ workspace, initialLists }: Props) {
       return;
     }
 
+    const data = await res.json();
+    setMergeNotices(data.mergedItems ?? []);
     setItemName("");
     setItemAmount("");
     setItemUnit("");
@@ -134,30 +161,36 @@ export function ShoppingApp({ workspace, initialLists }: Props) {
 
   async function createList() {
     if (!newListTitle.trim()) return;
+
     const res = await fetch("/api/lists", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ workspaceId: workspace.id, title: newListTitle }),
     });
+
     if (!res.ok) {
       setError("Не удалось создать список");
       return;
     }
+
     setNewListTitle("");
     await loadLists();
   }
 
   async function renameActiveList() {
     if (!activeList || !renameListTitle.trim()) return;
+
     const res = await fetch(`/api/lists/${activeList.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ title: renameListTitle.trim() }),
     });
+
     if (!res.ok) {
       setError("Не удалось переименовать список");
       return;
     }
+
     setIsRenamingList(false);
     await loadLists();
   }
@@ -165,11 +198,13 @@ export function ShoppingApp({ workspace, initialLists }: Props) {
   async function deleteActiveList() {
     if (!activeList) return;
     if (!window.confirm(`Удалить список "${activeList.title}"?`)) return;
+
     const res = await fetch(`/api/lists/${activeList.id}`, { method: "DELETE" });
     if (!res.ok) {
       setError("Не удалось удалить список");
       return;
     }
+
     setActiveListId("");
     await loadLists();
   }
@@ -180,10 +215,12 @@ export function ShoppingApp({ workspace, initialLists }: Props) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
+
     if (!res.ok) {
       setError("Не удалось обновить товар");
       return;
     }
+
     await loadLists();
   }
 
@@ -193,11 +230,13 @@ export function ShoppingApp({ workspace, initialLists }: Props) {
       setError("Не удалось удалить товар");
       return;
     }
+
     await loadLists();
   }
 
   async function saveEditedItem() {
     if (!editingItem) return;
+
     const quantity = [editingItem.amount.trim(), editingItem.unit.trim()].filter(Boolean).join(" ").trim();
     await updateItem(editingItem.id, {
       originalText: editingItem.name.trim(),
@@ -222,15 +261,22 @@ export function ShoppingApp({ workspace, initialLists }: Props) {
   return (
     <div className={styles.desktopShell}>
       <div className={styles.phoneFrame}>
-        <header className={styles.header}>
-          <div className={styles.headerCopy}>
-            <span className={styles.eyebrow}>{workspace.name}</span>
-            <h1>Список покупок</h1>
-            <p>Простой рабочий экран для общих покупок на телефоне, ноутбуке и большом мониторе.</p>
+        <header className={styles.topBar}>
+          <div className={styles.workspaceBadge}>
+            <span className={styles.workspaceDot} />
+            <div>
+              <strong>{workspace.name}</strong>
+              <span>{pendingItems.length} в покупке</span>
+            </div>
           </div>
+
           <div className={styles.headerActions}>
-            <button onClick={toggleTheme} className={styles.iconButton} aria-label="Переключить тему">◐</button>
-            <button onClick={logout} className={styles.iconButton} aria-label="Выйти">⎋</button>
+            <button onClick={toggleTheme} className={styles.iconButton} aria-label="Переключить тему">
+              <ThemeIcon />
+            </button>
+            <button onClick={logout} className={styles.iconButton} aria-label="Выйти">
+              <LogoutIcon />
+            </button>
           </div>
         </header>
 
@@ -240,22 +286,22 @@ export function ShoppingApp({ workspace, initialLists }: Props) {
             <strong>{allItems.length}</strong>
           </article>
           <article className={styles.statCard}>
-            <span>В покупке</span>
+            <span>Нужно купить</span>
             <strong>{pendingItems.length}</strong>
           </article>
           <article className={styles.statCard}>
-            <span>Готово</span>
+            <span>Куплено</span>
             <strong>{boughtItems.length}</strong>
           </article>
         </section>
 
         <div className={styles.appGrid}>
-          <aside className={styles.sidebar}>
+          <aside className={styles.listsColumn}>
             <section className={styles.panel}>
               <div className={styles.panelHeader}>
                 <div>
                   <span className={styles.panelKicker}>Списки</span>
-                  <h2>Переключение без лишних действий</h2>
+                  <h2>Переключение и управление</h2>
                 </div>
               </div>
 
@@ -293,7 +339,9 @@ export function ShoppingApp({ workspace, initialLists }: Props) {
                     Переименовать
                   </button>
                 ) : null}
-                <button className={styles.dangerButton} onClick={deleteActiveList} disabled={!activeList}>Удалить</button>
+                <button className={styles.dangerButton} onClick={deleteActiveList} disabled={!activeList}>
+                  Удалить
+                </button>
               </div>
 
               {isRenamingList ? (
@@ -311,16 +359,20 @@ export function ShoppingApp({ workspace, initialLists }: Props) {
                     required
                   />
                   <button className={styles.primaryMiniButton} type="submit">Сохранить</button>
-                  <button type="button" className={styles.ghostButton} onClick={() => setIsRenamingList(false)}>Отмена</button>
+                  <button type="button" className={styles.ghostButton} onClick={() => setIsRenamingList(false)}>
+                    Отмена
+                  </button>
                 </form>
               ) : null}
             </section>
+          </aside>
 
+          <section className={styles.composerColumn}>
             <section className={styles.panel}>
               <div className={styles.panelHeader}>
                 <div>
                   <span className={styles.panelKicker}>Добавить</span>
-                  <h2>Новые покупки в одном компактном блоке</h2>
+                  <h2>Новая покупка</h2>
                 </div>
               </div>
 
@@ -328,98 +380,113 @@ export function ShoppingApp({ workspace, initialLists }: Props) {
                 <input
                   value={itemName}
                   onChange={(e) => setItemName(e.target.value)}
-                  placeholder="Молоко 2 л, хлеб, яйца..."
+                  placeholder="Фарш индейки 1 кг, молоко 2 л, хлеб..."
                   required
                 />
+
                 <div className={styles.composerRow}>
                   <input value={itemAmount} onChange={(e) => setItemAmount(e.target.value)} placeholder="Кол-во" />
-                  <select value={itemUnit} onChange={(e) => setItemUnit(e.target.value)}>
-                    {UNIT_OPTIONS.map((unit) => (
-                      <option key={unit} value={unit}>{unit || "Ед."}</option>
-                    ))}
-                  </select>
-                  <button type="submit" disabled={loading || !activeList}>Добавить</button>
+                  <SelectField
+                    value={itemUnit}
+                    onChange={setItemUnit}
+                    options={UNIT_OPTIONS}
+                    placeholder="Ед."
+                    ariaLabel="Единица измерения"
+                  />
                 </div>
+
+                <button type="submit" disabled={loading || !activeList} className={styles.submitButton}>
+                  Добавить
+                </button>
               </form>
+
+              {mergeNotices.length ? (
+                <div className={styles.mergePanel}>
+                  <div className={styles.mergeHeader}>
+                    <MergeIcon />
+                    <strong>Объединили похожие товары</strong>
+                  </div>
+                  {mergeNotices.map((notice) => (
+                    <p key={`${notice.id}-${notice.mergedFrom}`}>
+                      <span>{notice.mergedFrom}</span> добавлен к <strong>{notice.title}</strong>
+                      {notice.quantity ? ` · ${notice.quantity}` : ""}
+                    </p>
+                  ))}
+                </div>
+              ) : null}
             </section>
-          </aside>
+          </section>
 
-          <main className={styles.contentArea}>
-            <div className={styles.contentHeader}>
-              <div>
-                <span className={styles.panelKicker}>Активный экран</span>
-                <h2>{activeList?.title ?? "Выбери список"}</h2>
+          <main className={styles.contentColumn}>
+            <section className={styles.panel}>
+              <div className={styles.contentHeader}>
+                <div>
+                  <span className={styles.panelKicker}>Список</span>
+                  <h2>{activeList?.title ?? "Выберите список"}</h2>
+                </div>
               </div>
-              <nav className={styles.bottomNav}>
-                <button className={activeTab === "list" ? styles.bottomActive : styles.bottomItem} onClick={() => setActiveTab("list")}>Список</button>
-                <button className={activeTab === "history" ? styles.bottomActive : styles.bottomItem} onClick={() => setActiveTab("history")}>История</button>
-              </nav>
-            </div>
 
-            {activeTab === "list" ? (
-              <div className={styles.listLayout}>
-                <section className={styles.panel}>
-                  <div className={styles.sectionHeading}>
-                    <h3>Нужно купить</h3>
-                    <span>{pendingItems.length}</span>
-                  </div>
-                  <div className={styles.card}>
-                    {pendingItems.length ? (
-                      pendingItems.map((item) => (
-                        <ItemRow
-                          key={item.id}
-                          item={item}
-                          onToggle={() => updateItem(item.id, { isBought: !item.isBought })}
-                          onEdit={() =>
-                            setEditingItem({
-                              id: item.id,
-                              name: item.originalText,
-                              amount: parseAmount(item.quantity),
-                              unit: parseUnit(item.quantity),
-                            })
-                          }
-                          onDelete={() => removeItem(item.id)}
-                        />
-                      ))
-                    ) : (
-                      <EmptyState text="Список пуст. Добавь первую покупку." />
-                    )}
-                  </div>
-                </section>
-
-                <section className={styles.panel}>
-                  <div className={styles.sectionHeading}>
-                    <h3>Уже куплено</h3>
-                    <span>{boughtItems.length}</span>
-                  </div>
-                  <div className={styles.card}>
-                    {boughtItems.length ? (
-                      boughtItems.map((item) => (
-                        <ItemRow
-                          key={item.id}
-                          item={item}
-                          onToggle={() => updateItem(item.id, { isBought: !item.isBought })}
-                          onEdit={() =>
-                            setEditingItem({
-                              id: item.id,
-                              name: item.originalText,
-                              amount: parseAmount(item.quantity),
-                              unit: parseUnit(item.quantity),
-                            })
-                          }
-                          onDelete={() => removeItem(item.id)}
-                        />
-                      ))
-                    ) : (
-                      <EmptyState text="Купленные товары пока не появились." />
-                    )}
-                  </div>
-                </section>
+              <div className={styles.card}>
+                {pendingItems.length ? (
+                  pendingItems.map((item) => (
+                    <ItemRow
+                      key={item.id}
+                      item={item}
+                      onToggle={() => updateItem(item.id, { isBought: !item.isBought })}
+                      onEdit={() =>
+                        setEditingItem({
+                          id: item.id,
+                          name: item.originalText,
+                          amount: parseAmount(item.quantity),
+                          unit: parseUnit(item.quantity),
+                        })
+                      }
+                      onDelete={() => removeItem(item.id)}
+                    />
+                  ))
+                ) : (
+                  <EmptyState text="Список пуст. Добавь первую покупку." />
+                )}
               </div>
-            ) : null}
+            </section>
 
-            {activeTab === "history" ? (
-              <section className={styles.historyWrap}>
+            <section className={styles.panel}>
+              <div className={styles.sectionHeading}>
+                <h3>Уже куплено</h3>
+                <span>{boughtItems.length}</span>
+              </div>
+
+              <div className={styles.card}>
+                {boughtItems.length ? (
+                  boughtItems.map((item) => (
+                    <ItemRow
+                      key={item.id}
+                      item={item}
+                      onToggle={() => updateItem(item.id, { isBought: !item.isBought })}
+                      onEdit={() =>
+                        setEditingItem({
+                          id: item.id,
+                          name: item.originalText,
+                          amount: parseAmount(item.quantity),
+                          unit: parseUnit(item.quantity),
+                        })
+                      }
+                      onDelete={() => removeItem(item.id)}
+                    />
+                  ))
+                ) : (
+                  <EmptyState text="Купленные товары пока не появились." />
+                )}
+              </div>
+            </section>
+
+            <section className={styles.panel}>
+              <div className={styles.sectionHeading}>
+                <h3>История</h3>
+                <span>{historyGroups.length}</span>
+              </div>
+
+              <div className={styles.historyWrap}>
                 {historyGroups.length ? (
                   historyGroups.map((group) => (
                     <div key={group.date} className={styles.historyDay}>
@@ -440,25 +507,33 @@ export function ShoppingApp({ workspace, initialLists }: Props) {
                 ) : (
                   <EmptyState text="История появится, когда в списке будут изменения." />
                 )}
-              </section>
-            ) : null}
+              </div>
+            </section>
           </main>
         </div>
 
         {editingItem ? (
           <div className={styles.sheetOverlay} onClick={() => setEditingItem(null)}>
             <div className={styles.sheet} onClick={(event) => event.stopPropagation()}>
-              <h3>Редактировать</h3>
+              <h3>Редактировать товар</h3>
               <label>Название</label>
-              <input value={editingItem.name} onChange={(e) => setEditingItem({ ...editingItem, name: e.target.value })} />
+              <input
+                value={editingItem.name}
+                onChange={(e) => setEditingItem({ ...editingItem, name: e.target.value })}
+              />
               <label>Количество</label>
-              <input value={editingItem.amount} onChange={(e) => setEditingItem({ ...editingItem, amount: e.target.value })} />
-              <label>Ед. изм.</label>
-              <select value={editingItem.unit} onChange={(e) => setEditingItem({ ...editingItem, unit: e.target.value })}>
-                {UNIT_OPTIONS.map((unit) => (
-                  <option key={unit} value={unit}>{unit || "Выберите"}</option>
-                ))}
-              </select>
+              <input
+                value={editingItem.amount}
+                onChange={(e) => setEditingItem({ ...editingItem, amount: e.target.value })}
+              />
+              <label>Единица измерения</label>
+              <SelectField
+                value={editingItem.unit}
+                onChange={(value) => setEditingItem({ ...editingItem, unit: value })}
+                options={UNIT_OPTIONS}
+                placeholder="Выберите"
+                ariaLabel="Единица измерения товара"
+              />
               <div className={styles.sheetActions}>
                 <button
                   className={styles.dangerButton}
@@ -469,8 +544,12 @@ export function ShoppingApp({ workspace, initialLists }: Props) {
                 >
                   Удалить
                 </button>
-                <button type="button" className={styles.ghostButton} onClick={() => setEditingItem(null)}>Отмена</button>
-                <button type="button" className={styles.primaryMiniButton} onClick={saveEditedItem}>Сохранить</button>
+                <button type="button" className={styles.ghostButton} onClick={() => setEditingItem(null)}>
+                  Отмена
+                </button>
+                <button type="button" className={styles.primaryMiniButton} onClick={saveEditedItem}>
+                  Сохранить
+                </button>
               </div>
             </div>
           </div>
@@ -480,10 +559,6 @@ export function ShoppingApp({ workspace, initialLists }: Props) {
       </div>
     </div>
   );
-}
-
-function EmptyState({ text }: { text: string }) {
-  return <div className={styles.emptyState}>{text}</div>;
 }
 
 function ItemRow({
@@ -500,17 +575,153 @@ function ItemRow({
   return (
     <div className={styles.itemRow}>
       <button className={styles.checkbox} onClick={onToggle} aria-label="Переключить статус">
-        {item.isBought ? "✓" : ""}
+        {item.isBought ? <CheckIcon /> : null}
       </button>
-      <div className={styles.itemContent}>
-        <p>{item.originalText}</p>
-        {item.quantity ? <small>{item.quantity}</small> : null}
-      </div>
-      <div className={styles.itemActions}>
-        <button className={styles.ghostButton} onClick={onEdit}>Изм.</button>
-        <button className={styles.dangerButton} onClick={onDelete}>Удалить</button>
+
+      <div className={styles.itemMain}>
+        <div className={styles.itemContent}>
+          <p>{item.originalText}</p>
+          {item.quantity ? <small>{item.quantity}</small> : null}
+        </div>
+
+        <div className={styles.itemActions}>
+          <button className={styles.ghostButton} onClick={onEdit}>Изм.</button>
+          <button className={styles.dangerButton} onClick={onDelete}>Удалить</button>
+        </div>
       </div>
     </div>
+  );
+}
+
+function SelectField({
+  value,
+  onChange,
+  options,
+  placeholder,
+  ariaLabel,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  options: SelectOption[];
+  placeholder: string;
+  ariaLabel: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  const listId = useId();
+
+  useEffect(() => {
+    function handlePointer(event: MouseEvent | TouchEvent) {
+      if (!rootRef.current?.contains(event.target as Node)) {
+        setOpen(false);
+      }
+    }
+
+    function handleEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setOpen(false);
+      }
+    }
+
+    document.addEventListener("mousedown", handlePointer);
+    document.addEventListener("touchstart", handlePointer);
+    document.addEventListener("keydown", handleEscape);
+
+    return () => {
+      document.removeEventListener("mousedown", handlePointer);
+      document.removeEventListener("touchstart", handlePointer);
+      document.removeEventListener("keydown", handleEscape);
+    };
+  }, []);
+
+  const selected = options.find((option) => option.value === value)?.label ?? placeholder;
+
+  return (
+    <div className={styles.selectRoot} ref={rootRef}>
+      <button
+        type="button"
+        className={styles.selectTrigger}
+        onClick={() => setOpen((current) => !current)}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-controls={listId}
+        aria-label={ariaLabel}
+      >
+        <span>{selected}</span>
+        <ChevronIcon />
+      </button>
+
+      {open ? (
+        <div className={styles.selectPopover} role="listbox" id={listId}>
+          {options.map((option) => (
+            <button
+              type="button"
+              key={option.value || "empty"}
+              className={option.value === value ? styles.selectOptionActive : styles.selectOption}
+              onClick={() => {
+                onChange(option.value);
+                setOpen(false);
+              }}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function EmptyState({ text }: { text: string }) {
+  return <div className={styles.emptyState}>{text}</div>;
+}
+
+function ThemeIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" className={styles.iconSvg}>
+      <path
+        d="M12 3a1 1 0 0 1 1 1v1.2a1 1 0 1 1-2 0V4a1 1 0 0 1 1-1Zm0 14a5 5 0 1 0 0-10v10Zm8-6a1 1 0 0 1 1 1 9 9 0 1 1-9-9 1 1 0 0 1 0 2 7 7 0 1 0 7 7 1 1 0 0 1 1-1Z"
+        fill="currentColor"
+      />
+    </svg>
+  );
+}
+
+function LogoutIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" className={styles.iconSvg}>
+      <path
+        d="M14 4a1 1 0 0 1 1-1h3a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-3a1 1 0 1 1 0-2h3V5h-3a1 1 0 0 1-1-1Zm-9 8a1 1 0 0 1 1-1h8.6l-2.3-2.3a1 1 0 1 1 1.4-1.4l4 4a1 1 0 0 1 0 1.4l-4 4a1 1 0 1 1-1.4-1.4l2.3-2.3H6a1 1 0 0 1-1-1Z"
+        fill="currentColor"
+      />
+    </svg>
+  );
+}
+
+function CheckIcon() {
+  return (
+    <svg viewBox="0 0 20 20" aria-hidden="true" className={styles.checkSvg}>
+      <path d="m7.8 13.2-3-3a1 1 0 0 1 1.4-1.4l1.6 1.6 5-5a1 1 0 0 1 1.4 1.4l-6.4 6.4a1 1 0 0 1-1.4 0Z" fill="currentColor" />
+    </svg>
+  );
+}
+
+function ChevronIcon() {
+  return (
+    <svg viewBox="0 0 20 20" aria-hidden="true" className={styles.chevronSvg}>
+      <path d="m5.8 7.8 4.2 4.2 4.2-4.2 1.4 1.4-5.6 5.6-5.6-5.6 1.4-1.4Z" fill="currentColor" />
+    </svg>
+  );
+}
+
+function MergeIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" className={styles.mergeSvg}>
+      <path
+        d="M7 5a1 1 0 0 1 1 1v4c0 1.7 1.3 3 3 3h6.6l-2.3-2.3a1 1 0 0 1 1.4-1.4l4 4a1 1 0 0 1 0 1.4l-4 4a1 1 0 0 1-1.4-1.4l2.3-2.3H11a5 5 0 0 1-5-5V6a1 1 0 0 1 1-1Zm10 14a1 1 0 0 1-1-1v-1a3 3 0 0 0-3-3H6a1 1 0 1 1 0-2h7a5 5 0 0 1 5 5v1a1 1 0 0 1-1 1Z"
+        fill="currentColor"
+      />
+    </svg>
   );
 }
 
@@ -519,8 +730,10 @@ function formatDateKey(isoDate: string): string {
   const today = new Date();
   const yesterday = new Date();
   yesterday.setDate(today.getDate() - 1);
+
   if (date.toDateString() === today.toDateString()) return "Сегодня";
   if (date.toDateString() === yesterday.toDateString()) return "Вчера";
+
   return date.toLocaleDateString("ru-RU", { day: "numeric", month: "long" });
 }
 
@@ -549,8 +762,10 @@ function parseNameAndQuantity(raw: string): { name: string; amount: string; unit
   const source = raw.trim();
   const match = source.match(/^(.*?)(?:\s+(\d+[.,]?\d*)\s*([a-zA-Zа-яА-Я.]+))$/);
   if (!match) return { name: source, amount: "", unit: "" };
+
   const unit = normalizeUnit(match[3] ?? "");
   if (!unit) return { name: source, amount: "", unit: "" };
+
   return {
     name: (match[1] ?? "").trim(),
     amount: (match[2] ?? "").replace(",", "."),
@@ -579,5 +794,6 @@ function normalizeUnit(rawUnit: string): string {
     упаковка: "уп",
     упаковки: "уп",
   };
+
   return map[unit] ?? "";
 }

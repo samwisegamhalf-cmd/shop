@@ -8,51 +8,55 @@
 
 .phoneFrame {
   width: 100%;
-  max-width: 1380px;
+  max-width: 1440px;
   margin: 0 auto;
-  background: color-mix(in srgb, var(--surface) 88%, transparent);
   border: 1px solid var(--border-strong);
   border-radius: 32px;
+  background: color-mix(in srgb, var(--surface) 90%, transparent);
   box-shadow: var(--shadow-lg);
   backdrop-filter: blur(24px);
   overflow: clip;
 }
 
-.header {
+.topBar {
   display: flex;
+  align-items: center;
   justify-content: space-between;
-  align-items: flex-start;
   gap: 16px;
-  padding: 24px 20px 12px;
+  padding: 18px 20px 10px;
 }
 
-.headerCopy {
-  max-width: 720px;
+.workspaceBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  box-shadow: var(--shadow-sm);
 }
 
-.eyebrow,
-.panelKicker {
-  display: inline-block;
-  margin-bottom: 8px;
-  color: var(--accent-strong);
-  font-size: 0.78rem;
-  font-weight: 700;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
+.workspaceDot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--accent) 0%, var(--accent-strong) 100%);
 }
 
-.header h1 {
-  font-size: clamp(2rem, 5vw, 3.8rem);
-  line-height: 0.94;
-  letter-spacing: -0.05em;
+.workspaceBadge strong,
+.workspaceBadge span {
+  display: block;
 }
 
-.header p {
-  margin-top: 10px;
-  max-width: 52ch;
+.workspaceBadge strong {
+  font-size: 0.96rem;
+}
+
+.workspaceBadge span {
+  margin-top: 2px;
   color: var(--muted);
-  font-size: 1rem;
-  line-height: 1.5;
+  font-size: 0.8rem;
 }
 
 .headerActions {
@@ -66,11 +70,12 @@
 .ghostButton,
 .dangerButton,
 .primaryMiniButton,
+.submitButton,
 .topActions button,
-.composer button,
-.bottomItem,
-.bottomActive,
-.checkbox {
+.checkbox,
+.selectTrigger,
+.selectOption,
+.selectOptionActive {
   transition:
     transform 0.18s ease,
     background-color 0.18s ease,
@@ -80,24 +85,31 @@
 }
 
 .iconButton {
-  width: 44px;
-  height: 44px;
+  width: 46px;
+  height: 46px;
+  display: inline-grid;
+  place-items: center;
   border: 1px solid var(--border);
-  background: color-mix(in srgb, var(--surface) 86%, transparent);
-  color: var(--foreground);
   border-radius: 16px;
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  color: var(--foreground);
   box-shadow: var(--shadow-sm);
+}
+
+.iconSvg {
+  width: 22px;
+  height: 22px;
 }
 
 .statsRow {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 12px;
-  padding: 0 20px 20px;
+  padding: 0 20px 18px;
 }
 
 .statCard {
-  padding: 16px 18px;
+  padding: 14px 16px;
   border: 1px solid var(--border);
   border-radius: 22px;
   background:
@@ -109,14 +121,14 @@
   display: block;
   margin-bottom: 8px;
   color: var(--muted);
-  font-size: 0.82rem;
+  font-size: 0.78rem;
+  font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.08em;
 }
 
 .statCard strong {
-  font-size: clamp(1.5rem, 4vw, 2.3rem);
-  line-height: 1;
+  font-size: clamp(1.4rem, 4vw, 2.1rem);
   letter-spacing: -0.04em;
 }
 
@@ -126,25 +138,43 @@
   padding: 0 20px 20px;
 }
 
-.sidebar,
-.contentArea {
+.listsColumn,
+.composerColumn,
+.contentColumn {
   display: flex;
   flex-direction: column;
   gap: 18px;
 }
 
 .panel {
+  padding: 18px;
   border: 1px solid var(--border);
   border-radius: 28px;
   background:
     linear-gradient(180deg, color-mix(in srgb, var(--surface) 95%, transparent) 0%, color-mix(in srgb, var(--surface-muted) 78%, transparent) 100%);
   box-shadow: var(--shadow-sm);
-  padding: 18px;
+}
+
+.panelHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.panelKicker {
+  display: inline-block;
+  margin-bottom: 8px;
+  color: var(--accent-strong);
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
 }
 
 .panelHeader h2,
 .contentHeader h2 {
-  font-size: clamp(1.3rem, 2.2vw, 2rem);
+  font-size: clamp(1.18rem, 2vw, 1.8rem);
   letter-spacing: -0.04em;
   line-height: 1.05;
 }
@@ -191,10 +221,6 @@
   grid-template-columns: minmax(0, 1fr) auto;
 }
 
-.renameRow {
-  grid-template-columns: minmax(0, 1fr);
-}
-
 .inlineActions {
   display: flex;
   gap: 10px;
@@ -205,33 +231,29 @@
 .topActions input,
 .renameRow input,
 .composer input,
-.composer select,
-.sheet input,
-.sheet select {
-  min-width: 0;
+.sheet input {
   width: 100%;
+  min-width: 0;
   border: 1px solid var(--border);
   border-radius: 18px;
   background: color-mix(in srgb, var(--surface) 95%, transparent);
   color: var(--foreground);
   padding: 14px 16px;
-  font: inherit;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
 }
 
 .topActions button,
-.composer button,
+.submitButton,
 .primaryMiniButton,
 .ghostButton,
 .dangerButton {
   border-radius: 18px;
   padding: 12px 16px;
-  font: inherit;
   font-weight: 700;
 }
 
 .topActions button,
-.composer button,
+.submitButton,
 .primaryMiniButton {
   border: none;
   background: linear-gradient(135deg, var(--accent) 0%, var(--accent-strong) 100%);
@@ -251,6 +273,10 @@
   background: color-mix(in srgb, var(--danger) 9%, var(--surface));
 }
 
+.renameRow {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 .composer {
   margin-top: 14px;
   display: flex;
@@ -260,59 +286,120 @@
 
 .composerRow {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 96px auto;
+  grid-template-columns: minmax(0, 1fr) 120px;
   gap: 10px;
 }
 
-.contentHeader {
+.submitButton {
+  min-height: 50px;
+  font-size: 1rem;
+}
+
+.selectRoot {
+  position: relative;
+}
+
+.selectTrigger {
+  width: 100%;
+  min-height: 52px;
   display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-
-.bottomNav {
-  display: inline-grid;
-  width: fit-content;
-  grid-template-columns: 1fr 1fr;
-  gap: 6px;
-  padding: 6px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
   border: 1px solid var(--border);
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--surface) 86%, transparent);
-  box-shadow: var(--shadow-sm);
+  border-radius: 18px;
+  padding: 14px 16px;
+  background: color-mix(in srgb, var(--surface) 95%, transparent);
+  color: var(--foreground);
+  text-align: left;
 }
 
-.bottomItem,
-.bottomActive {
-  min-width: 112px;
-  border: none;
-  border-radius: 999px;
-  padding: 10px 16px;
-  background: transparent;
+.chevronSvg {
+  width: 18px;
+  height: 18px;
   color: var(--muted);
-  font: inherit;
-  font-weight: 700;
 }
 
-.bottomActive {
-  background: var(--foreground);
-  color: var(--background);
-}
-
-.listLayout {
+.selectPopover {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  right: 0;
+  z-index: 15;
   display: grid;
-  gap: 18px;
+  gap: 6px;
+  padding: 8px;
+  border: 1px solid var(--border-strong);
+  border-radius: 20px;
+  background: color-mix(in srgb, var(--surface) 98%, transparent);
+  box-shadow: var(--shadow-md);
+  backdrop-filter: blur(18px);
+}
+
+.selectOption,
+.selectOptionActive {
+  border: none;
+  border-radius: 14px;
+  padding: 11px 12px;
+  background: transparent;
+  color: var(--foreground);
+  text-align: left;
+  font-weight: 600;
+}
+
+.selectOptionActive {
+  background: color-mix(in srgb, var(--accent) 16%, var(--surface));
+  color: var(--accent-strong);
+}
+
+.mergePanel {
+  margin-top: 16px;
+  padding: 14px 16px;
+  border: 1px solid color-mix(in srgb, var(--accent) 24%, var(--border));
+  border-radius: 20px;
+  background: color-mix(in srgb, var(--accent) 10%, var(--surface));
+}
+
+.mergeHeader {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+  color: var(--accent-strong);
+}
+
+.mergeSvg {
+  width: 18px;
+  height: 18px;
+}
+
+.mergePanel p {
+  color: var(--foreground);
+  line-height: 1.5;
+}
+
+.mergePanel p + p {
+  margin-top: 6px;
+}
+
+.mergePanel span {
+  color: var(--muted);
+}
+
+.contentHeader {
+  margin-bottom: 14px;
 }
 
 .sectionHeading {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 12px;
   margin-bottom: 14px;
 }
 
 .sectionHeading h3 {
-  font-size: 1.08rem;
+  font-size: 1.06rem;
   letter-spacing: -0.02em;
 }
 
@@ -349,15 +436,20 @@
 .checkbox {
   width: 34px;
   height: 34px;
+  display: inline-grid;
+  place-items: center;
   border-radius: 50%;
   border: 1px solid var(--border-strong);
   background: color-mix(in srgb, var(--surface-muted) 70%, var(--surface));
   color: var(--accent-strong);
-  font-size: 1rem;
-  font-weight: 800;
 }
 
-.itemContent {
+.checkSvg {
+  width: 18px;
+  height: 18px;
+}
+
+.itemMain {
   min-width: 0;
 }
 
@@ -376,9 +468,9 @@
 
 .itemActions {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
   margin-top: 12px;
-  flex-wrap: wrap;
 }
 
 .historyWrap {
@@ -440,22 +532,22 @@
   position: fixed;
   inset: 0;
   z-index: 30;
-  background: rgba(7, 13, 20, 0.45);
   display: flex;
   align-items: flex-end;
   justify-content: center;
   padding: 20px;
+  background: rgba(7, 13, 20, 0.45);
 }
 
 .sheet {
   width: min(560px, 100%);
-  border: 1px solid var(--border-strong);
-  border-radius: 28px;
-  background: color-mix(in srgb, var(--surface) 96%, transparent);
-  padding: 22px;
   display: flex;
   flex-direction: column;
   gap: 10px;
+  padding: 22px;
+  border: 1px solid var(--border-strong);
+  border-radius: 28px;
+  background: color-mix(in srgb, var(--surface) 96%, transparent);
   box-shadow: var(--shadow-lg);
 }
 
@@ -502,37 +594,30 @@
   .dangerButton:hover,
   .primaryMiniButton:hover,
   .topActions button:hover,
-  .composer button:hover,
-  .bottomItem:hover,
-  .checkbox:hover {
+  .submitButton:hover,
+  .checkbox:hover,
+  .selectTrigger:hover,
+  .selectOption:hover {
     transform: translateY(-1px);
     box-shadow: var(--shadow-sm);
   }
 }
 
-@media (min-width: 900px) {
+@media (min-width: 1120px) {
   .desktopShell {
     padding: 22px;
   }
 
   .appGrid {
-    grid-template-columns: minmax(320px, 420px) minmax(0, 1fr);
+    grid-template-columns: minmax(280px, 320px) minmax(320px, 380px) minmax(0, 1fr);
     align-items: start;
   }
 
-  .sidebar {
+  .listsColumn,
+  .composerColumn {
     position: sticky;
     top: 20px;
-  }
-
-  .contentHeader {
-    flex-direction: row;
-    justify-content: space-between;
-    align-items: center;
-  }
-
-  .listLayout {
-    grid-template-columns: minmax(0, 1.15fr) minmax(320px, 0.85fr);
+    align-self: start;
   }
 
   .sheetOverlay {
@@ -544,22 +629,28 @@
   }
 }
 
+@media (max-width: 1119px) {
+  .appGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
 @media (max-width: 899px) {
   .desktopShell {
     padding: 0;
   }
 
   .phoneFrame {
-    border-radius: 0;
+    min-height: 100dvh;
     border-left: none;
     border-right: none;
-    min-height: 100dvh;
+    border-radius: 0;
   }
 }
 
 @media (max-width: 640px) {
-  .header {
-    padding: 20px 16px 10px;
+  .topBar {
+    padding: 16px 16px 10px;
   }
 
   .statsRow,
@@ -572,21 +663,12 @@
     gap: 10px;
   }
 
-  .statCard {
-    padding: 14px;
-  }
-
   .topActions,
   .composerRow {
     grid-template-columns: 1fr;
   }
 
-  .bottomNav {
-    width: 100%;
-  }
-
-  .bottomItem,
-  .bottomActive {
+  .workspaceBadge {
     min-width: 0;
   }
 }

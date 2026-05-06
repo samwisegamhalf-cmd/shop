@@ -1,8 +1,11 @@
 import { ItemSource } from "@prisma/client";
 
+import { canonicalizeItemName } from "@/lib/item-normalization";
+
 export type ParsedQuickItem = {
   originalText: string;
   normalizedName: string;
+  canonicalName: string;
   quantity: string | null;
   source: ItemSource;
   language: string;
@@ -26,6 +29,7 @@ export function parseQuickInput(input: string): ParsedQuickItem[] {
       return {
         originalText: raw,
         normalizedName: normalizedName || raw.toLowerCase(),
+        canonicalName: canonicalizeItemName(normalizedName || raw),
         quantity,
         source: ItemSource.MANUAL,
         language: "und",
