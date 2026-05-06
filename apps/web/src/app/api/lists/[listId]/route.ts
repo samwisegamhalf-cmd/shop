@@ -5,6 +5,8 @@ import { db } from "@/lib/db";
 
 const updateListSchema = z.object({
   title: z.string().trim().min(1).max(120),
+  icon: z.string().trim().min(1).max(32).optional(),
+  color: z.string().trim().min(1).max(32).optional(),
 });
 
 export async function PATCH(request: Request, context: RouteContext<"/api/lists/[listId]">) {
@@ -35,7 +37,11 @@ export async function PATCH(request: Request, context: RouteContext<"/api/lists/
 
   const updated = await db.shoppingList.update({
     where: { id: listId },
-    data: { title: parsed.data.title },
+    data: {
+      title: parsed.data.title,
+      icon: parsed.data.icon,
+      color: parsed.data.color,
+    },
   });
 
   return Response.json({ list: updated });

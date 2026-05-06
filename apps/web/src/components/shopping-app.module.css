@@ -251,9 +251,19 @@
   margin-top: 14px;
 }
 
-.topActions {
+.listMetaRow,
+.favoriteTags {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+}
+
+.topActions {
+  display: flex;
+  flex-direction: column;
+}
+
+.listMetaRow {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .topActions input,
@@ -346,31 +356,26 @@
   margin-top: 14px;
 }
 
-.favoriteGrid {
-  display: grid;
+.favoriteTags {
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
 }
 
-.favoriteCard {
+.favoriteTag {
   display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 8px;
-  padding: 14px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 11px 12px;
   border: 1px solid var(--border);
-  border-radius: 20px;
+  border-radius: 999px;
   background: color-mix(in srgb, var(--surface) 95%, transparent);
   text-align: left;
+  font-weight: 700;
 }
 
-.favoriteCard strong {
-  font-size: 0.96rem;
-  line-height: 1.2;
-}
-
-.favoriteCard small {
+.favoriteTag small {
   color: var(--muted);
+  font-weight: 600;
 }
 
 .recommendationList {
@@ -590,7 +595,20 @@
   border-bottom: 1px solid var(--border);
 }
 
+.itemRowBought {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 12px;
+  padding: 14px;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 88%, transparent);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--surface-muted) 44%, transparent) 0%, transparent 100%);
+}
+
 .itemRow:last-child {
+  border-bottom: none;
+}
+
+.itemRowBought:last-child {
   border-bottom: none;
 }
 
@@ -633,6 +651,10 @@
   margin-top: 7px;
   color: var(--muted);
   font-size: 0.92rem;
+}
+
+.itemRowBought .itemContent p {
+  font-size: 1rem;
 }
 
 .emptyState {
@@ -708,7 +730,7 @@
   .iconTextButton:hover,
   .iconDangerButton:hover,
   .iconFavoriteActive:hover,
-  .favoriteCard:hover,
+  .favoriteTag:hover,
   .recommendationBody:hover,
   .ghostButton:hover,
   .dangerButton:hover,
@@ -795,7 +817,7 @@
 
   .topActions,
   .composerRow,
-  .favoriteGrid,
+  .favoriteTags,
   .recommendationItem {
     grid-template-columns: 1fr;
   }
@@ -822,10 +844,24 @@
   }
 
   .heroListPanel {
-    padding: 16px;
+    padding: 14px;
+  }
+
+  .panel,
+  .listCard {
+    padding: 14px;
   }
 
   .itemContent p {
     font-size: 1rem;
+  }
+
+  .itemRow,
+  .itemRowBought {
+    padding: 12px 10px;
+  }
+
+  .sectionHeading {
+    margin-bottom: 10px;
   }
 }

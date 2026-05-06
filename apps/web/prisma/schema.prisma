@@ -70,6 +70,8 @@ model ShoppingList {
   id          String         @id @default(cuid())
   workspaceId String
   title       String
+  icon        String         @default("list")
+  color       String         @default("teal")
   createdAt   DateTime       @default(now())
   updatedAt   DateTime       @updatedAt
   archivedAt  DateTime?

@@ -20,6 +20,8 @@ export type ShoppingItemDto = {
 export type ShoppingListDto = {
   id: string;
   title: string;
+  icon: string;
+  color: string;
   items: ShoppingItemDto[];
 };
 

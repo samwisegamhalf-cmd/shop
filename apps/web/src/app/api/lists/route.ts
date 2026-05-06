@@ -6,6 +6,8 @@ import { db } from "@/lib/db";
 const createListSchema = z.object({
   workspaceId: z.string().min(1),
   title: z.string().trim().min(1).max(120),
+  icon: z.string().trim().min(1).max(32).optional(),
+  color: z.string().trim().min(1).max(32).optional(),
 });
 
 export async function GET(request: Request) {
@@ -54,7 +56,7 @@ export async function POST(request: Request) {
     return Response.json({ error: "Invalid payload" }, { status: 400 });
   }
 
-  const { workspaceId, title } = parsed.data;
+  const { workspaceId, title, icon, color } = parsed.data;
   const hasMembership = await db.workspaceMember.findUnique({
     where: { workspaceId_userId: { workspaceId, userId: user.id } },
   });
@@ -67,6 +69,8 @@ export async function POST(request: Request) {
     data: {
       workspaceId,
       title,
+      icon: icon ?? "list",
+      color: color ?? "teal",
     },
   });
 
