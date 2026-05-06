@@ -246,7 +246,9 @@
 .submitButton,
 .primaryMiniButton,
 .ghostButton,
-.dangerButton {
+.dangerButton,
+.iconTextButton,
+.iconDangerButton {
   border-radius: 18px;
   padding: 12px 16px;
   font-weight: 700;
@@ -268,6 +270,24 @@
 }
 
 .dangerButton {
+  border-color: var(--danger-border);
+  color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 9%, var(--surface));
+}
+
+.iconTextButton,
+.iconDangerButton {
+  width: 42px;
+  height: 42px;
+  display: inline-grid;
+  place-items: center;
+  padding: 0;
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  color: var(--foreground);
+}
+
+.iconDangerButton {
   border-color: var(--danger-border);
   color: var(--danger);
   background: color-mix(in srgb, var(--danger) 9%, var(--surface));
@@ -453,6 +473,13 @@
   min-width: 0;
 }
 
+.itemLine {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
 .itemContent p {
   font-size: 1rem;
   font-weight: 700;
@@ -467,58 +494,14 @@
 }
 
 .itemActions {
-  display: flex;
-  flex-wrap: wrap;
+  display: inline-flex;
   gap: 8px;
-  margin-top: 12px;
-}
-
-.historyWrap {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-
-.historyDay h4 {
-  margin-bottom: 8px;
-  color: var(--muted);
-  font-size: 0.8rem;
-  font-weight: 800;
-  text-transform: uppercase;
-  letter-spacing: 0.12em;
-}
-
-.historyRow {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 12px;
-  padding: 14px;
-  border-bottom: 1px solid var(--border);
-}
-
-.historyRow:last-child {
-  border-bottom: none;
-}
-
-.historyRow p {
-  font-weight: 700;
-}
-
-.historyRow small {
-  display: inline-block;
-  margin-top: 6px;
-  color: var(--muted);
-}
-
-.sourceBadge {
   flex-shrink: 0;
-  border-radius: 999px;
-  padding: 7px 10px;
-  background: color-mix(in srgb, var(--accent) 14%, var(--surface));
-  color: var(--accent-strong);
-  font-size: 0.78rem;
-  font-weight: 800;
+}
+
+.rowIcon {
+  width: 18px;
+  height: 18px;
 }
 
 .emptyState {
@@ -595,6 +578,8 @@
   .primaryMiniButton:hover,
   .topActions button:hover,
   .submitButton:hover,
+  .iconTextButton:hover,
+  .iconDangerButton:hover,
   .checkbox:hover,
   .selectTrigger:hover,
   .selectOption:hover {
@@ -666,6 +651,14 @@
   .topActions,
   .composerRow {
     grid-template-columns: 1fr;
+  }
+
+  .itemLine {
+    flex-direction: column;
+  }
+
+  .itemActions {
+    margin-top: 10px;
   }
 
   .workspaceBadge {

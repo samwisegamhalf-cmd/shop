@@ -96,19 +96,6 @@ export function ShoppingApp({ workspace, initialLists }: Props) {
   const pendingItems = useMemo(() => allItems.filter((item) => !item.isBought), [allItems]);
   const boughtItems = useMemo(() => allItems.filter((item) => item.isBought), [allItems]);
 
-  const historyGroups = useMemo(() => {
-    const map = new Map<string, ShoppingItemDto[]>();
-    [...allItems]
-      .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
-      .forEach((item) => {
-        const key = formatDateKey(item.updatedAt);
-        const current = map.get(key) ?? [];
-        current.push(item);
-        map.set(key, current);
-      });
-    return Array.from(map.entries()).map(([date, items]) => ({ date, items }));
-  }, [allItems]);
-
   async function submitStructuredItem(event?: FormEvent<HTMLFormElement>) {
     event?.preventDefault();
     if (!activeList || !itemName.trim()) return;
@@ -125,6 +112,12 @@ export function ShoppingApp({ workspace, initialLists }: Props) {
       parsedName = parsed.name;
       amount = parsed.amount;
       unit = parsed.unit;
+    }
+
+    if (!amount && !unit) {
+      const fallback = inferDefaultQuantity(parsedName);
+      amount = fallback.amount;
+      unit = fallback.unit;
     }
 
     const quantity = [amount, unit].filter(Boolean).join(" ").trim();
@@ -479,36 +472,6 @@ export function ShoppingApp({ workspace, initialLists }: Props) {
                 )}
               </div>
             </section>
-
-            <section className={styles.panel}>
-              <div className={styles.sectionHeading}>
-                <h3>История</h3>
-                <span>{historyGroups.length}</span>
-              </div>
-
-              <div className={styles.historyWrap}>
-                {historyGroups.length ? (
-                  historyGroups.map((group) => (
-                    <div key={group.date} className={styles.historyDay}>
-                      <h4>{group.date}</h4>
-                      <div className={styles.card}>
-                        {group.items.map((item) => (
-                          <div key={item.id} className={styles.historyRow}>
-                            <div>
-                              <p>{item.originalText}</p>
-                              {item.quantity ? <small>{item.quantity}</small> : null}
-                            </div>
-                            <span className={styles.sourceBadge}>{formatSource(item.source)}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  ))
-                ) : (
-                  <EmptyState text="История появится, когда в списке будут изменения." />
-                )}
-              </div>
-            </section>
           </main>
         </div>
 
@@ -579,14 +542,20 @@ function ItemRow({
       </button>
 
       <div className={styles.itemMain}>
-        <div className={styles.itemContent}>
-          <p>{item.originalText}</p>
-          {item.quantity ? <small>{item.quantity}</small> : null}
-        </div>
+        <div className={styles.itemLine}>
+          <div className={styles.itemContent}>
+            <p>{item.originalText}</p>
+            {item.quantity ? <small>{item.quantity}</small> : null}
+          </div>
 
-        <div className={styles.itemActions}>
-          <button className={styles.ghostButton} onClick={onEdit}>Изм.</button>
-          <button className={styles.dangerButton} onClick={onDelete}>Удалить</button>
+          <div className={styles.itemActions}>
+            <button className={styles.iconTextButton} onClick={onEdit} aria-label="Изменить">
+              <EditIcon />
+            </button>
+            <button className={styles.iconDangerButton} onClick={onDelete} aria-label="Удалить">
+              <TrashIcon />
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -701,7 +670,10 @@ function LogoutIcon() {
 function CheckIcon() {
   return (
     <svg viewBox="0 0 20 20" aria-hidden="true" className={styles.checkSvg}>
-      <path d="m7.8 13.2-3-3a1 1 0 0 1 1.4-1.4l1.6 1.6 5-5a1 1 0 0 1 1.4 1.4l-6.4 6.4a1 1 0 0 1-1.4 0Z" fill="currentColor" />
+      <path
+        d="m7.8 13.2-3-3a1 1 0 0 1 1.4-1.4l1.6 1.6 5-5a1 1 0 0 1 1.4 1.4l-6.4 6.4a1 1 0 0 1-1.4 0Z"
+        fill="currentColor"
+      />
     </svg>
   );
 }
@@ -725,24 +697,26 @@ function MergeIcon() {
   );
 }
 
-function formatDateKey(isoDate: string): string {
-  const date = new Date(isoDate);
-  const today = new Date();
-  const yesterday = new Date();
-  yesterday.setDate(today.getDate() - 1);
-
-  if (date.toDateString() === today.toDateString()) return "Сегодня";
-  if (date.toDateString() === yesterday.toDateString()) return "Вчера";
-
-  return date.toLocaleDateString("ru-RU", { day: "numeric", month: "long" });
+function EditIcon() {
+  return (
+    <svg viewBox="0 0 20 20" aria-hidden="true" className={styles.rowIcon}>
+      <path
+        d="M14.8 2.8a2 2 0 0 1 2.8 2.8l-8.7 8.7-3.7.9.9-3.7 8.7-8.7Zm1.4 1.4a.5.5 0 0 0-.7 0l-1 1 1.4 1.4 1-1a.5.5 0 0 0 0-.7l-.7-.7ZM13.5 6.2l-6.3 6.3-.3 1.3 1.3-.3 6.3-6.3-1-1Z"
+        fill="currentColor"
+      />
+    </svg>
+  );
 }
 
-function formatSource(source: string): string {
-  const normalized = source.toLowerCase();
-  if (normalized.includes("telegram")) return "Telegram";
-  if (normalized.includes("voice")) return "Голос";
-  if (normalized.includes("photo")) return "Фото";
-  return "Вручную";
+function TrashIcon() {
+  return (
+    <svg viewBox="0 0 20 20" aria-hidden="true" className={styles.rowIcon}>
+      <path
+        d="M7.5 2.5h5a1 1 0 0 1 1 1V4H17a.75.75 0 0 1 0 1.5h-.8l-.7 9A2 2 0 0 1 13.5 16h-7a2 2 0 0 1-2-1.8l-.7-9H3a.75.75 0 0 1 0-1.5h3.5v-.5a1 1 0 0 1 1-1Zm4.5 1.5h-4v.5h4V4Zm-5.7 1.5.6 8.6a.5.5 0 0 0 .5.4h7a.5.5 0 0 0 .5-.4l.6-8.6H6.3Zm2 1.7a.75.75 0 0 1 .75.75v4a.75.75 0 0 1-1.5 0v-4a.75.75 0 0 1 .75-.75Zm3.4 0a.75.75 0 0 1 .75.75v4a.75.75 0 0 1-1.5 0v-4a.75.75 0 0 1 .75-.75Z"
+        fill="currentColor"
+      />
+    </svg>
+  );
 }
 
 function parseAmount(quantity: string | null): string {
@@ -796,4 +770,15 @@ function normalizeUnit(rawUnit: string): string {
   };
 
   return map[unit] ?? "";
+}
+
+function inferDefaultQuantity(rawName: string): { amount: string; unit: string } {
+  const name = rawName.trim().toLowerCase();
+
+  if (/хлеб|батон|багет|лаваш/.test(name)) return { amount: "1", unit: "шт" };
+  if (/перец|огурец|помидор|томат|яблоко|банан|авокадо|лимон|лук/.test(name)) return { amount: "1", unit: "шт" };
+  if (/яйц/.test(name)) return { amount: "10", unit: "шт" };
+  if (/молоко|кефир|сок|вода/.test(name)) return { amount: "1", unit: "л" };
+
+  return { amount: "", unit: "" };
 }
