@@ -27,6 +27,17 @@ export default async function Home() {
   });
 
   const initialLists = shoppingListsForClient(lists);
+  const favorites = await db.favoriteProduct.findMany({
+    where: {
+      userId: session.user.id,
+      workspaceId: membership.workspaceId,
+    },
+    orderBy: [{ updatedAt: "desc" }, { label: "asc" }],
+  });
+
+  const preferredListId = lists.some((list) => list.id === session.user.activeListId)
+    ? session.user.activeListId
+    : lists[0]?.id ?? "";
 
   return (
     <main>
@@ -37,6 +48,13 @@ export default async function Home() {
           role: membership.role,
         }}
         initialLists={initialLists}
+        initialActiveListId={preferredListId}
+        initialFavorites={favorites.map((item) => ({
+          id: item.id,
+          label: item.label,
+          canonicalName: item.canonicalName,
+          quantity: item.quantity,
+        }))}
       />
     </main>
   );

@@ -2,7 +2,12 @@
 
 import { FormEvent, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 
-import type { ShoppingItemDto, ShoppingListDto, WorkspaceSummary } from "@/types/app";
+import type {
+  FavoriteProductDto,
+  ShoppingItemDto,
+  ShoppingListDto,
+  WorkspaceSummary,
+} from "@/types/app";
 
 import { canonicalizeItemName } from "@/lib/item-normalization";
 
@@ -11,6 +16,8 @@ import styles from "./shopping-app.module.css";
 type Props = {
   workspace: WorkspaceSummary;
   initialLists: ShoppingListDto[];
+  initialActiveListId: string;
+  initialFavorites: FavoriteProductDto[];
 };
 
 type AppMode = "shopping" | "lists";
@@ -23,6 +30,11 @@ type EditingState = {
   unit: string;
 };
 
+type RenameState = {
+  id: string;
+  title: string;
+};
+
 type MergeNotice = {
   id: string;
   title: string;
@@ -30,17 +42,11 @@ type MergeNotice = {
   mergedFrom: string;
 };
 
-type FavoriteItem = {
-  canonicalName: string;
-  label: string;
-  quantity: string | null;
-};
-
 type SuggestionItem = {
   canonicalName: string;
   label: string;
   quantity: string | null;
-  source: "favorite" | "history";
+  source: "favorite" | "suggestion" | "frequent";
 };
 
 type SelectOption = {
@@ -59,11 +65,14 @@ const UNIT_OPTIONS: SelectOption[] = [
   { value: "уп", label: "уп" },
 ];
 
-const FAVORITES_STORAGE_KEY = "shop_favorites_v1";
-
-export function ShoppingApp({ workspace, initialLists }: Props) {
+export function ShoppingApp({
+  workspace,
+  initialLists,
+  initialActiveListId,
+  initialFavorites,
+}: Props) {
   const [lists, setLists] = useState<ShoppingListDto[]>(initialLists);
-  const [activeListId, setActiveListId] = useState<string>(initialLists[0]?.id ?? "");
+  const [activeListId, setActiveListId] = useState<string>(initialActiveListId || initialLists[0]?.id || "");
   const [itemName, setItemName] = useState("");
   const [itemAmount, setItemAmount] = useState("");
   const [itemUnit, setItemUnit] = useState("");
@@ -71,16 +80,27 @@ export function ShoppingApp({ workspace, initialLists }: Props) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [editingItem, setEditingItem] = useState<EditingState | null>(null);
-  const [isRenamingList, setIsRenamingList] = useState(false);
-  const [renameListTitle, setRenameListTitle] = useState("");
+  const [renamingList, setRenamingList] = useState<RenameState | null>(null);
   const [mergeNotices, setMergeNotices] = useState<MergeNotice[]>([]);
   const [mode, setMode] = useState<AppMode>("shopping");
   const [listViewMode, setListViewMode] = useState<ListViewMode>("single");
-  const [favorites, setFavorites] = useState<FavoriteItem[]>([]);
+  const [favorites, setFavorites] = useState<FavoriteProductDto[]>(initialFavorites);
+  const didMountActiveList = useRef(false);
 
   const activeList = useMemo(
     () => lists.find((list) => list.id === activeListId) ?? lists[0] ?? null,
     [activeListId, lists],
+  );
+
+  useEffect(() => {
+    if (!lists.length) return;
+    if (!activeListId || lists.some((list) => list.id === activeListId)) return;
+    setActiveListId(lists[0].id);
+  }, [lists, activeListId]);
+
+  const activeListOptions = useMemo(
+    () => lists.map((list) => ({ value: list.id, label: list.title })),
+    [lists],
   );
 
   const loadLists = useCallback(async () => {
@@ -88,11 +108,29 @@ export function ShoppingApp({ workspace, initialLists }: Props) {
     if (!res.ok) {
       throw new Error("Cannot load lists");
     }
-
     const data = await res.json();
     setLists(data.lists);
     if (!activeListId && data.lists[0]?.id) {
       setActiveListId(data.lists[0].id);
+    }
+  }, [workspace.id, activeListId]);
+
+  const loadPreferences = useCallback(async () => {
+    const [activeRes, favoritesRes] = await Promise.all([
+      fetch("/api/preferences/active-list"),
+      fetch(`/api/favorites?workspaceId=${workspace.id}`),
+    ]);
+
+    if (activeRes.ok) {
+      const activeData = await activeRes.json();
+      if (activeData.activeListId && activeData.activeListId !== activeListId) {
+        setActiveListId(activeData.activeListId);
+      }
+    }
+
+    if (favoritesRes.ok) {
+      const favoritesData = await favoritesRes.json();
+      setFavorites(favoritesData.favorites ?? []);
     }
   }, [workspace.id, activeListId]);
 
@@ -101,61 +139,103 @@ export function ShoppingApp({ workspace, initialLists }: Props) {
     const savedTheme = localStorage.getItem("shop_theme");
     if (savedTheme === "light" || savedTheme === "dark") {
       root.dataset.theme = savedTheme;
-    } else {
-      root.dataset.theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+      return;
     }
-
-    try {
-      const rawFavorites = localStorage.getItem(FAVORITES_STORAGE_KEY);
-      if (!rawFavorites) return;
-      const parsed = JSON.parse(rawFavorites) as FavoriteItem[];
-      if (Array.isArray(parsed)) {
-        setFavorites(parsed.filter((item) => item?.canonicalName && item?.label));
-      }
-    } catch {
-      localStorage.removeItem(FAVORITES_STORAGE_KEY);
-    }
+    root.dataset.theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
   }, []);
 
   useEffect(() => {
     const timer = setInterval(() => {
       loadLists().catch(() => undefined);
+      loadPreferences().catch(() => undefined);
     }, 5000);
+
     return () => clearInterval(timer);
-  }, [loadLists]);
+  }, [loadLists, loadPreferences]);
+
+  useEffect(() => {
+    if (!activeListId) return;
+    if (!didMountActiveList.current) {
+      didMountActiveList.current = true;
+      return;
+    }
+
+    fetch("/api/preferences/active-list", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ listId: activeListId }),
+    }).catch(() => undefined);
+  }, [activeListId]);
 
   const allItems = useMemo(() => lists.flatMap((list) => list.items), [lists]);
   const activeItems = useMemo(() => activeList?.items ?? [], [activeList]);
   const pendingItems = useMemo(() => activeItems.filter((item) => !item.isBought), [activeItems]);
   const boughtItems = useMemo(() => activeItems.filter((item) => item.isBought), [activeItems]);
 
+  const frequentSuggestions = useMemo(() => {
+    const counters = new Map<string, { count: number; label: string; quantity: string | null }>();
+
+    for (const item of allItems) {
+      const canonicalName = canonicalizeItemName(item.originalText);
+      if (!canonicalName) continue;
+      const current = counters.get(canonicalName);
+      if (!current) {
+        counters.set(canonicalName, {
+          count: 1,
+          label: item.originalText,
+          quantity: item.quantity,
+        });
+      } else {
+        current.count += 1;
+      }
+    }
+
+    return Array.from(counters.entries())
+      .filter(([canonicalName, value]) => {
+        const alreadyFavorite = favorites.some((entry) => entry.canonicalName === canonicalName);
+        return value.count >= 2 && !alreadyFavorite;
+      })
+      .sort((a, b) => b[1].count - a[1].count)
+      .slice(0, 8)
+      .map(([canonicalName, value]) => ({
+        canonicalName,
+        label: value.label,
+        quantity: value.quantity,
+        source: "frequent" as const,
+      }));
+  }, [allItems, favorites]);
+
   const suggestionPool = useMemo(() => {
     const map = new Map<string, SuggestionItem>();
 
-    favorites.forEach((favorite) => {
+    for (const favorite of favorites) {
       map.set(favorite.canonicalName, {
         canonicalName: favorite.canonicalName,
         label: favorite.label,
         quantity: favorite.quantity,
         source: "favorite",
       });
-    });
+    }
 
-    for (const item of allItems) {
-      const canonicalName = canonicalizeItemName(item.originalText);
-      if (!canonicalName) continue;
-      if (!map.has(canonicalName)) {
-        map.set(canonicalName, {
-          canonicalName,
-          label: item.originalText,
-          quantity: item.quantity,
-          source: "history",
-        });
+    for (const frequent of frequentSuggestions) {
+      if (!map.has(frequent.canonicalName)) {
+        map.set(frequent.canonicalName, frequent);
       }
     }
 
+    for (const item of allItems) {
+      const canonicalName = canonicalizeItemName(item.originalText);
+      if (!canonicalName || map.has(canonicalName)) continue;
+      map.set(canonicalName, {
+        canonicalName,
+        label: item.originalText,
+        quantity: item.quantity,
+        source: "suggestion",
+      });
+    }
+
     return Array.from(map.values());
-  }, [allItems, favorites]);
+  }, [allItems, favorites, frequentSuggestions]);
 
   const filteredSuggestions = useMemo(() => {
     const query = itemName.trim().toLowerCase();
@@ -163,11 +243,9 @@ export function ShoppingApp({ workspace, initialLists }: Props) {
 
     return suggestionPool
       .filter((item) => item.label.toLowerCase().includes(query))
-      .sort((a, b) => Number(b.source === "favorite") - Number(a.source === "favorite"))
+      .sort((a, b) => suggestionPriority(b.source) - suggestionPriority(a.source))
       .slice(0, 6);
   }, [itemName, suggestionPool]);
-
-  const favoriteSuggestions = useMemo(() => favorites.slice(0, 8), [favorites]);
 
   async function submitStructuredItem(event?: FormEvent<HTMLFormElement>) {
     event?.preventDefault();
@@ -231,7 +309,7 @@ export function ShoppingApp({ workspace, initialLists }: Props) {
     const res = await fetch("/api/lists", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ workspaceId: workspace.id, title: newListTitle }),
+      body: JSON.stringify({ workspaceId: workspace.id, title: newListTitle.trim() }),
     });
 
     if (!res.ok) {
@@ -243,13 +321,13 @@ export function ShoppingApp({ workspace, initialLists }: Props) {
     await loadLists();
   }
 
-  async function renameActiveList() {
-    if (!activeList || !renameListTitle.trim()) return;
+  async function renameList() {
+    if (!renamingList?.id || !renamingList.title.trim()) return;
 
-    const res = await fetch(`/api/lists/${activeList.id}`, {
+    const res = await fetch(`/api/lists/${renamingList.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title: renameListTitle.trim() }),
+      body: JSON.stringify({ title: renamingList.title.trim() }),
     });
 
     if (!res.ok) {
@@ -257,21 +335,22 @@ export function ShoppingApp({ workspace, initialLists }: Props) {
       return;
     }
 
-    setIsRenamingList(false);
+    setRenamingList(null);
     await loadLists();
   }
 
-  async function deleteActiveList() {
-    if (!activeList) return;
-    if (!window.confirm(`Удалить список "${activeList.title}"?`)) return;
+  async function deleteList(listId: string, title: string) {
+    if (!window.confirm(`Удалить список "${title}"?`)) return;
 
-    const res = await fetch(`/api/lists/${activeList.id}`, { method: "DELETE" });
+    const res = await fetch(`/api/lists/${listId}`, { method: "DELETE" });
     if (!res.ok) {
       setError("Не удалось удалить список");
       return;
     }
 
-    setActiveListId("");
+    if (activeListId === listId) {
+      setActiveListId("");
+    }
     await loadLists();
   }
 
@@ -302,7 +381,6 @@ export function ShoppingApp({ workspace, initialLists }: Props) {
 
   async function saveEditedItem() {
     if (!editingItem) return;
-
     const quantity = [editingItem.amount.trim(), editingItem.unit.trim()].filter(Boolean).join(" ").trim();
     await updateItem(editingItem.id, {
       originalText: editingItem.name.trim(),
@@ -310,6 +388,34 @@ export function ShoppingApp({ workspace, initialLists }: Props) {
       quantity: quantity || null,
     });
     setEditingItem(null);
+  }
+
+  async function toggleFavorite(input: FavoriteProductDto) {
+    const exists = favorites.some((entry) => entry.canonicalName === input.canonicalName);
+    const method = exists ? "DELETE" : "POST";
+
+    const res = await fetch("/api/favorites", {
+      method,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        workspaceId: workspace.id,
+        label: input.label,
+        canonicalName: input.canonicalName,
+        quantity: input.quantity,
+      }),
+    });
+
+    if (!res.ok) {
+      setError("Не удалось обновить избранное");
+      return;
+    }
+
+    if (exists) {
+      setFavorites((current) => current.filter((entry) => entry.canonicalName !== input.canonicalName));
+    } else {
+      const data = await res.json();
+      setFavorites((current) => [data.favorite, ...current.filter((entry) => entry.canonicalName !== input.canonicalName)]);
+    }
   }
 
   async function logout() {
@@ -322,17 +428,6 @@ export function ShoppingApp({ workspace, initialLists }: Props) {
     const nextTheme = currentTheme === "dark" ? "light" : "dark";
     document.documentElement.dataset.theme = nextTheme;
     localStorage.setItem("shop_theme", nextTheme);
-  }
-
-  function toggleFavorite(item: FavoriteItem) {
-    setFavorites((current) => {
-      const exists = current.some((entry) => entry.canonicalName === item.canonicalName);
-      const next = exists
-        ? current.filter((entry) => entry.canonicalName !== item.canonicalName)
-        : [item, ...current].slice(0, 24);
-      localStorage.setItem(FAVORITES_STORAGE_KEY, JSON.stringify(next));
-      return next;
-    });
   }
 
   function applySuggestion(item: { label: string; quantity: string | null }) {
@@ -394,46 +489,39 @@ export function ShoppingApp({ workspace, initialLists }: Props) {
             <div className={styles.panel}>
               <div className={styles.panelHeader}>
                 <div>
-                  <span className={styles.panelKicker}>Управление</span>
-                  <h2>Списки и порядок работы</h2>
+                  <span className={styles.panelKicker}>Список списков</span>
+                  <h2>Каждый список можно открыть, переименовать и удалить</h2>
                 </div>
               </div>
 
-              <div className={styles.managementRow}>
-                <section className={styles.listChips}>
-                  {lists.map((list) => (
+              <div className={styles.managementList}>
+                {lists.map((list) => (
+                  <div key={list.id} className={styles.managementItem}>
                     <button
-                      key={list.id}
-                      className={list.id === activeList?.id ? styles.tabActive : styles.tab}
+                      className={list.id === activeListId ? styles.managementOpenActive : styles.managementOpen}
                       onClick={() => setActiveListId(list.id)}
                     >
-                      {list.title}
+                      <span>{list.title}</span>
+                      <small>{list.items.length} товаров</small>
                     </button>
-                  ))}
-                </section>
-
-                <div className={styles.managementActions}>
-                  <button
-                    className={styles.iconTextButton}
-                    onClick={() => {
-                      if (!activeList) return;
-                      setRenameListTitle(activeList.title);
-                      setIsRenamingList(true);
-                    }}
-                    aria-label="Переименовать список"
-                    disabled={!activeList}
-                  >
-                    <EditIcon />
-                  </button>
-                  <button
-                    className={styles.iconDangerButton}
-                    onClick={deleteActiveList}
-                    aria-label="Удалить список"
-                    disabled={!activeList}
-                  >
-                    <TrashIcon />
-                  </button>
-                </div>
+                    <div className={styles.managementActions}>
+                      <button
+                        className={styles.iconTextButton}
+                        onClick={() => setRenamingList({ id: list.id, title: list.title })}
+                        aria-label="Переименовать список"
+                      >
+                        <EditIcon />
+                      </button>
+                      <button
+                        className={styles.iconDangerButton}
+                        onClick={() => deleteList(list.id, list.title)}
+                        aria-label="Удалить список"
+                      >
+                        <TrashIcon />
+                      </button>
+                    </div>
+                  </div>
+                ))}
               </div>
 
               <div className={styles.topActions}>
@@ -445,23 +533,23 @@ export function ShoppingApp({ workspace, initialLists }: Props) {
                 <button onClick={createList} disabled={loading}>Создать</button>
               </div>
 
-              {isRenamingList ? (
+              {renamingList ? (
                 <form
                   className={styles.renameRow}
                   onSubmit={(event) => {
                     event.preventDefault();
-                    renameActiveList().catch(() => undefined);
+                    renameList().catch(() => undefined);
                   }}
                 >
                   <input
-                    value={renameListTitle}
-                    onChange={(e) => setRenameListTitle(e.target.value)}
+                    value={renamingList.title}
+                    onChange={(e) => setRenamingList({ ...renamingList, title: e.target.value })}
                     placeholder="Название списка"
                     required
                   />
                   <div className={styles.renameActions}>
                     <button className={styles.primaryMiniButton} type="submit">Сохранить</button>
-                    <button type="button" className={styles.ghostButton} onClick={() => setIsRenamingList(false)}>
+                    <button type="button" className={styles.ghostButton} onClick={() => setRenamingList(null)}>
                       Отмена
                     </button>
                   </div>
@@ -471,206 +559,237 @@ export function ShoppingApp({ workspace, initialLists }: Props) {
           </section>
         ) : (
           <div className={styles.shoppingGrid}>
-            <section className={styles.panel}>
-              <div className={styles.panelHeader}>
-                <div>
-                  <span className={styles.panelKicker}>Новый пункт</span>
-                  <h2>Добавление, избранное и подсказки</h2>
-                </div>
-              </div>
+            <main className={styles.mainColumn}>
+              <section className={styles.heroListPanel}>
+                <div className={styles.panelTopRow}>
+                  <div>
+                    <span className={styles.panelKicker}>Главный список</span>
+                    <h2>{listViewMode === "single" ? activeList?.title ?? "Выберите список" : "Все списки подряд"}</h2>
+                  </div>
 
-              {favoriteSuggestions.length ? (
-                <div className={styles.favoriteSection}>
-                  <div className={styles.sectionCaption}>Избранные товары</div>
-                  <div className={styles.favoriteChips}>
-                    {favoriteSuggestions.map((item) => (
+                  <div className={styles.inlineTopActions}>
+                    <div className={styles.modeTabs}>
                       <button
-                        key={item.canonicalName}
-                        className={styles.favoriteChip}
-                        onClick={() => applySuggestion(item)}
+                        className={listViewMode === "single" ? styles.modeTabActive : styles.modeTab}
+                        onClick={() => setListViewMode("single")}
                       >
-                        <StarIcon />
-                        <span>{item.label}</span>
+                        Один
                       </button>
-                    ))}
+                      <button
+                        className={listViewMode === "all" ? styles.modeTabActive : styles.modeTab}
+                        onClick={() => setListViewMode("all")}
+                      >
+                        Все
+                      </button>
+                    </div>
+
+                    <SelectField
+                      value={activeListId}
+                      onChange={setActiveListId}
+                      options={activeListOptions}
+                      placeholder="Выберите список"
+                      ariaLabel="Список"
+                    />
                   </div>
                 </div>
-              ) : null}
 
-              <form className={styles.composer} onSubmit={submitStructuredItem}>
-                <div className={styles.inputStack}>
-                  <input
-                    value={itemName}
-                    onChange={(e) => setItemName(e.target.value)}
-                    placeholder="Фарш индейки 1 кг, молоко 2 л, хлеб..."
-                    required
-                  />
-                  {filteredSuggestions.length ? (
-                    <div className={styles.suggestionList}>
-                      {filteredSuggestions.map((item) => (
+                {listViewMode === "single" ? (
+                  <div className={styles.listSections}>
+                    <ListCard
+                      title="Нужно купить"
+                      count={pendingItems.length}
+                      emptyText="Список пуст. Добавь первую покупку."
+                      items={pendingItems}
+                      favorites={favorites}
+                      onToggleFavorite={toggleFavorite}
+                      onToggle={(item) => updateItem(item.id, { isBought: !item.isBought })}
+                      onEdit={(item) =>
+                        setEditingItem({
+                          id: item.id,
+                          name: item.originalText,
+                          amount: parseAmount(item.quantity),
+                          unit: parseUnit(item.quantity),
+                        })
+                      }
+                      onDelete={(item) => removeItem(item.id)}
+                    />
+
+                    <ListCard
+                      title="Уже куплено"
+                      count={boughtItems.length}
+                      emptyText="Купленные товары пока не появились."
+                      items={boughtItems}
+                      favorites={favorites}
+                      onToggleFavorite={toggleFavorite}
+                      onToggle={(item) => updateItem(item.id, { isBought: !item.isBought })}
+                      onEdit={(item) =>
+                        setEditingItem({
+                          id: item.id,
+                          name: item.originalText,
+                          amount: parseAmount(item.quantity),
+                          unit: parseUnit(item.quantity),
+                        })
+                      }
+                      onDelete={(item) => removeItem(item.id)}
+                    />
+                  </div>
+                ) : (
+                  <div className={styles.allListsWrap}>
+                    {lists.map((list) => (
+                      <section key={list.id} className={styles.allListSection}>
+                        <div className={styles.sectionHeading}>
+                          <h3>{list.title}</h3>
+                          <span>{list.items.length}</span>
+                        </div>
+                        <div className={styles.card}>
+                          {list.items.length ? (
+                            list.items.map((item) => (
+                              <ItemRow
+                                key={item.id}
+                                item={item}
+                                isFavorite={favorites.some((entry) => entry.canonicalName === canonicalizeItemName(item.originalText))}
+                                onToggleFavorite={toggleFavorite}
+                                onToggle={() => updateItem(item.id, { isBought: !item.isBought })}
+                                onEdit={() =>
+                                  setEditingItem({
+                                    id: item.id,
+                                    name: item.originalText,
+                                    amount: parseAmount(item.quantity),
+                                    unit: parseUnit(item.quantity),
+                                  })
+                                }
+                                onDelete={() => removeItem(item.id)}
+                              />
+                            ))
+                          ) : (
+                            <EmptyState text="В этом списке пока нет товаров." />
+                          )}
+                        </div>
+                      </section>
+                    ))}
+                  </div>
+                )}
+              </section>
+            </main>
+
+            <aside className={styles.sideColumn}>
+              <section className={styles.panel}>
+                <div className={styles.panelHeader}>
+                  <div>
+                    <span className={styles.panelKicker}>Новый пункт</span>
+                    <h2>Добавление и подсказки</h2>
+                  </div>
+                </div>
+
+                {favorites.length ? (
+                  <div className={styles.favoritePanel}>
+                    <div className={styles.sectionCaption}>Избранные</div>
+                    <div className={styles.favoriteGrid}>
+                      {favorites.slice(0, 8).map((item) => (
                         <button
-                          key={`${item.source}-${item.canonicalName}`}
-                          type="button"
-                          className={styles.suggestionItem}
+                          key={item.canonicalName}
+                          className={styles.favoriteCard}
                           onClick={() => applySuggestion(item)}
                         >
-                          <div>
-                            <strong>{item.label}</strong>
-                            {item.quantity ? <small>{item.quantity}</small> : null}
-                          </div>
-                          <span>{item.source === "favorite" ? "избранное" : "подсказка"}</span>
+                          <StarIcon />
+                          <strong>{item.label}</strong>
+                          {item.quantity ? <small>{item.quantity}</small> : <small>Быстро добавить</small>}
                         </button>
                       ))}
                     </div>
-                  ) : null}
-                </div>
-
-                <div className={styles.composerRow}>
-                  <input value={itemAmount} onChange={(e) => setItemAmount(e.target.value)} placeholder="Кол-во" />
-                  <SelectField
-                    value={itemUnit}
-                    onChange={setItemUnit}
-                    options={UNIT_OPTIONS}
-                    placeholder="Ед."
-                    ariaLabel="Единица измерения"
-                  />
-                </div>
-
-                <button type="submit" disabled={loading || !activeList} className={styles.submitButton}>
-                  Добавить
-                </button>
-              </form>
-
-              {mergeNotices.length ? (
-                <div className={styles.mergePanel}>
-                  <div className={styles.mergeHeader}>
-                    <MergeIcon />
-                    <strong>Объединили похожие товары</strong>
                   </div>
-                  {mergeNotices.map((notice) => (
-                    <p key={`${notice.id}-${notice.mergedFrom}`}>
-                      <span>{notice.mergedFrom}</span> добавлен к <strong>{notice.title}</strong>
-                      {notice.quantity ? ` · ${notice.quantity}` : ""}
-                    </p>
-                  ))}
-                </div>
-              ) : null}
-            </section>
+                ) : null}
 
-            <main className={styles.panel}>
-              <div className={styles.panelTopRow}>
-                <div>
-                  <span className={styles.panelKicker}>Списки</span>
-                  <h2>{listViewMode === "single" ? activeList?.title ?? "Выберите список" : "Все списки подряд"}</h2>
-                </div>
+                {frequentSuggestions.length ? (
+                  <div className={styles.favoritePanel}>
+                    <div className={styles.sectionCaption}>Часто покупаете</div>
+                    <div className={styles.recommendationList}>
+                      {frequentSuggestions.map((item) => (
+                        <div key={item.canonicalName} className={styles.recommendationItem}>
+                          <button className={styles.recommendationBody} onClick={() => applySuggestion(item)}>
+                            <strong>{item.label}</strong>
+                            {item.quantity ? <small>{item.quantity}</small> : <small>Подсказка</small>}
+                          </button>
+                          <button
+                            className={styles.iconTextButton}
+                            onClick={() =>
+                              toggleFavorite({
+                                id: "",
+                                label: item.label,
+                                canonicalName: item.canonicalName,
+                                quantity: item.quantity,
+                              })
+                            }
+                            aria-label="Добавить в избранное"
+                          >
+                            <StarIcon />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
 
-                <div className={styles.inlineTopActions}>
-                  <div className={styles.modeTabs}>
-                    <button
-                      className={listViewMode === "single" ? styles.modeTabActive : styles.modeTab}
-                      onClick={() => setListViewMode("single")}
-                    >
-                      Один
-                    </button>
-                    <button
-                      className={listViewMode === "all" ? styles.modeTabActive : styles.modeTab}
-                      onClick={() => setListViewMode("all")}
-                    >
-                      Все
-                    </button>
+                <form className={styles.composer} onSubmit={submitStructuredItem}>
+                  <div className={styles.inputStack}>
+                    <input
+                      value={itemName}
+                      onChange={(e) => setItemName(e.target.value)}
+                      placeholder="Фарш индейки 1 кг, молоко 2 л, хлеб..."
+                      required
+                    />
+                    {filteredSuggestions.length ? (
+                      <div className={styles.suggestionList}>
+                        {filteredSuggestions.map((item) => (
+                          <button
+                            key={`${item.source}-${item.canonicalName}`}
+                            type="button"
+                            className={styles.suggestionItem}
+                            onClick={() => applySuggestion(item)}
+                          >
+                            <div>
+                              <strong>{item.label}</strong>
+                              {item.quantity ? <small>{item.quantity}</small> : null}
+                            </div>
+                            <span>{labelForSuggestion(item.source)}</span>
+                          </button>
+                        ))}
+                      </div>
+                    ) : null}
                   </div>
 
-                  <section className={styles.listChips}>
-                    {lists.map((list) => (
-                      <button
-                        key={list.id}
-                        className={list.id === activeList?.id ? styles.tabActive : styles.tab}
-                        onClick={() => setActiveListId(list.id)}
-                      >
-                        {list.title}
-                      </button>
+                  <div className={styles.composerRow}>
+                    <input value={itemAmount} onChange={(e) => setItemAmount(e.target.value)} placeholder="Кол-во" />
+                    <SelectField
+                      value={itemUnit}
+                      onChange={setItemUnit}
+                      options={UNIT_OPTIONS}
+                      placeholder="Ед."
+                      ariaLabel="Единица измерения"
+                    />
+                  </div>
+
+                  <button type="submit" disabled={loading || !activeList} className={styles.submitButton}>
+                    Добавить
+                  </button>
+                </form>
+
+                {mergeNotices.length ? (
+                  <div className={styles.mergePanel}>
+                    <div className={styles.mergeHeader}>
+                      <MergeIcon />
+                      <strong>Объединили похожие товары</strong>
+                    </div>
+                    {mergeNotices.map((notice) => (
+                      <p key={`${notice.id}-${notice.mergedFrom}`}>
+                        <span>{notice.mergedFrom}</span> добавлен к <strong>{notice.title}</strong>
+                        {notice.quantity ? ` · ${notice.quantity}` : ""}
+                      </p>
                     ))}
-                  </section>
-                </div>
-              </div>
-
-              {listViewMode === "single" ? (
-                <div className={styles.listSections}>
-                  <ListCard
-                    title="Нужно купить"
-                    count={pendingItems.length}
-                    emptyText="Список пуст. Добавь первую покупку."
-                    items={pendingItems}
-                    onToggle={(item) => updateItem(item.id, { isBought: !item.isBought })}
-                    onEdit={(item) =>
-                      setEditingItem({
-                        id: item.id,
-                        name: item.originalText,
-                        amount: parseAmount(item.quantity),
-                        unit: parseUnit(item.quantity),
-                      })
-                    }
-                    onDelete={(item) => removeItem(item.id)}
-                    onToggleFavorite={toggleFavorite}
-                    favorites={favorites}
-                  />
-
-                  <ListCard
-                    title="Уже куплено"
-                    count={boughtItems.length}
-                    emptyText="Купленные товары пока не появились."
-                    items={boughtItems}
-                    onToggle={(item) => updateItem(item.id, { isBought: !item.isBought })}
-                    onEdit={(item) =>
-                      setEditingItem({
-                        id: item.id,
-                        name: item.originalText,
-                        amount: parseAmount(item.quantity),
-                        unit: parseUnit(item.quantity),
-                      })
-                    }
-                    onDelete={(item) => removeItem(item.id)}
-                    onToggleFavorite={toggleFavorite}
-                    favorites={favorites}
-                  />
-                </div>
-              ) : (
-                <div className={styles.allListsWrap}>
-                  {lists.map((list) => (
-                    <section key={list.id} className={styles.allListSection}>
-                      <div className={styles.sectionHeading}>
-                        <h3>{list.title}</h3>
-                        <span>{list.items.length}</span>
-                      </div>
-                      <div className={styles.card}>
-                        {list.items.length ? (
-                          list.items.map((item) => (
-                            <ItemRow
-                              key={item.id}
-                              item={item}
-                              onToggle={() => updateItem(item.id, { isBought: !item.isBought })}
-                              onEdit={() =>
-                                setEditingItem({
-                                  id: item.id,
-                                  name: item.originalText,
-                                  amount: parseAmount(item.quantity),
-                                  unit: parseUnit(item.quantity),
-                                })
-                              }
-                              onDelete={() => removeItem(item.id)}
-                              onToggleFavorite={toggleFavorite}
-                              isFavorite={favorites.some((entry) => entry.canonicalName === canonicalizeItemName(item.originalText))}
-                            />
-                          ))
-                        ) : (
-                          <EmptyState text="В этом списке пока нет товаров." />
-                        )}
-                      </div>
-                    </section>
-                  ))}
-                </div>
-              )}
-            </main>
+                  </div>
+                ) : null}
+              </section>
+            </aside>
           </div>
         )}
 
@@ -728,21 +847,21 @@ function ListCard({
   count,
   emptyText,
   items,
+  favorites,
+  onToggleFavorite,
   onToggle,
   onEdit,
   onDelete,
-  onToggleFavorite,
-  favorites,
 }: {
   title: string;
   count: number;
   emptyText: string;
   items: ShoppingItemDto[];
+  favorites: FavoriteProductDto[];
+  onToggleFavorite: (item: FavoriteProductDto) => void;
   onToggle: (item: ShoppingItemDto) => void;
   onEdit: (item: ShoppingItemDto) => void;
   onDelete: (item: ShoppingItemDto) => void;
-  onToggleFavorite: (item: FavoriteItem) => void;
-  favorites: FavoriteItem[];
 }) {
   return (
     <section className={styles.listCard}>
@@ -756,11 +875,11 @@ function ListCard({
             <ItemRow
               key={item.id}
               item={item}
+              isFavorite={favorites.some((entry) => entry.canonicalName === canonicalizeItemName(item.originalText))}
+              onToggleFavorite={onToggleFavorite}
               onToggle={() => onToggle(item)}
               onEdit={() => onEdit(item)}
               onDelete={() => onDelete(item)}
-              onToggleFavorite={onToggleFavorite}
-              isFavorite={favorites.some((entry) => entry.canonicalName === canonicalizeItemName(item.originalText))}
             />
           ))
         ) : (
@@ -773,18 +892,18 @@ function ListCard({
 
 function ItemRow({
   item,
+  isFavorite,
+  onToggleFavorite,
   onToggle,
   onEdit,
   onDelete,
-  onToggleFavorite,
-  isFavorite,
 }: {
   item: ShoppingItemDto;
+  isFavorite: boolean;
+  onToggleFavorite: (item: FavoriteProductDto) => void;
   onToggle: () => void;
   onEdit: () => void;
   onDelete: () => void;
-  onToggleFavorite: (item: FavoriteItem) => void;
-  isFavorite: boolean;
 }) {
   return (
     <div className={styles.itemRow}>
@@ -804,8 +923,9 @@ function ItemRow({
               className={isFavorite ? styles.iconFavoriteActive : styles.iconTextButton}
               onClick={() =>
                 onToggleFavorite({
-                  canonicalName: canonicalizeItemName(item.originalText),
+                  id: "",
                   label: item.originalText,
+                  canonicalName: canonicalizeItemName(item.originalText),
                   quantity: item.quantity,
                 })
               }
@@ -1057,4 +1177,16 @@ function inferDefaultQuantity(rawName: string): { amount: string; unit: string }
   if (/фарш|мясо|курица|индейка/.test(name)) return { amount: "1", unit: "кг" };
 
   return { amount: "", unit: "" };
+}
+
+function suggestionPriority(source: SuggestionItem["source"]): number {
+  if (source === "favorite") return 3;
+  if (source === "frequent") return 2;
+  return 1;
+}
+
+function labelForSuggestion(source: SuggestionItem["source"]): string {
+  if (source === "favorite") return "избранное";
+  if (source === "frequent") return "часто";
+  return "подсказка";
 }

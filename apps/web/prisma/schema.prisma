@@ -21,12 +21,14 @@ model User {
   email          String            @unique
   displayName    String?
   passwordHash   String
+  activeListId   String?
   createdAt      DateTime          @default(now())
   updatedAt      DateTime          @updatedAt
   memberships    WorkspaceMember[]
   sessions       Session[]
   addedItems     ShoppingItem[]    @relation("ItemCreator")
   dictionary     ProductDictionary[]
+  favorites      FavoriteProduct[]
 }
 
 model Session {
@@ -49,6 +51,7 @@ model Workspace {
   lists       ShoppingList[]
   dictionary  ProductDictionary[]
   recipes     Recipe[]
+  favorites   FavoriteProduct[]
 }
 
 model WorkspaceMember {
@@ -132,4 +135,20 @@ model RecipeIngredient {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
   recipe         Recipe   @relation(fields: [recipeId], references: [id], onDelete: Cascade)
+}
+
+model FavoriteProduct {
+  id            String   @id @default(cuid())
+  userId        String
+  workspaceId   String
+  label         String
+  canonicalName String
+  quantity      String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace     Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, workspaceId, canonicalName])
+  @@index([workspaceId, canonicalName])
 }

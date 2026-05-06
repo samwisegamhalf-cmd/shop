@@ -22,3 +22,10 @@ export type ShoppingListDto = {
   title: string;
   items: ShoppingItemDto[];
 };
+
+export type FavoriteProductDto = {
+  id: string;
+  label: string;
+  canonicalName: string;
+  quantity: string | null;
+};
