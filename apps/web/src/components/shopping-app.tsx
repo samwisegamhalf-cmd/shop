@@ -13,6 +13,9 @@ type Props = {
   initialLists: ShoppingListDto[];
 };
 
+type AppMode = "shopping" | "lists";
+type ListViewMode = "single" | "all";
+
 type EditingState = {
   id: string;
   name: string;
@@ -25,6 +28,19 @@ type MergeNotice = {
   title: string;
   quantity: string | null;
   mergedFrom: string;
+};
+
+type FavoriteItem = {
+  canonicalName: string;
+  label: string;
+  quantity: string | null;
+};
+
+type SuggestionItem = {
+  canonicalName: string;
+  label: string;
+  quantity: string | null;
+  source: "favorite" | "history";
 };
 
 type SelectOption = {
@@ -43,6 +59,8 @@ const UNIT_OPTIONS: SelectOption[] = [
   { value: "уп", label: "уп" },
 ];
 
+const FAVORITES_STORAGE_KEY = "shop_favorites_v1";
+
 export function ShoppingApp({ workspace, initialLists }: Props) {
   const [lists, setLists] = useState<ShoppingListDto[]>(initialLists);
   const [activeListId, setActiveListId] = useState<string>(initialLists[0]?.id ?? "");
@@ -56,6 +74,9 @@ export function ShoppingApp({ workspace, initialLists }: Props) {
   const [isRenamingList, setIsRenamingList] = useState(false);
   const [renameListTitle, setRenameListTitle] = useState("");
   const [mergeNotices, setMergeNotices] = useState<MergeNotice[]>([]);
+  const [mode, setMode] = useState<AppMode>("shopping");
+  const [listViewMode, setListViewMode] = useState<ListViewMode>("single");
+  const [favorites, setFavorites] = useState<FavoriteItem[]>([]);
 
   const activeList = useMemo(
     () => lists.find((list) => list.id === activeListId) ?? lists[0] ?? null,
@@ -80,9 +101,20 @@ export function ShoppingApp({ workspace, initialLists }: Props) {
     const savedTheme = localStorage.getItem("shop_theme");
     if (savedTheme === "light" || savedTheme === "dark") {
       root.dataset.theme = savedTheme;
-      return;
+    } else {
+      root.dataset.theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
     }
-    root.dataset.theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+
+    try {
+      const rawFavorites = localStorage.getItem(FAVORITES_STORAGE_KEY);
+      if (!rawFavorites) return;
+      const parsed = JSON.parse(rawFavorites) as FavoriteItem[];
+      if (Array.isArray(parsed)) {
+        setFavorites(parsed.filter((item) => item?.canonicalName && item?.label));
+      }
+    } catch {
+      localStorage.removeItem(FAVORITES_STORAGE_KEY);
+    }
   }, []);
 
   useEffect(() => {
@@ -92,9 +124,50 @@ export function ShoppingApp({ workspace, initialLists }: Props) {
     return () => clearInterval(timer);
   }, [loadLists]);
 
-  const allItems = useMemo(() => activeList?.items ?? [], [activeList]);
-  const pendingItems = useMemo(() => allItems.filter((item) => !item.isBought), [allItems]);
-  const boughtItems = useMemo(() => allItems.filter((item) => item.isBought), [allItems]);
+  const allItems = useMemo(() => lists.flatMap((list) => list.items), [lists]);
+  const activeItems = useMemo(() => activeList?.items ?? [], [activeList]);
+  const pendingItems = useMemo(() => activeItems.filter((item) => !item.isBought), [activeItems]);
+  const boughtItems = useMemo(() => activeItems.filter((item) => item.isBought), [activeItems]);
+
+  const suggestionPool = useMemo(() => {
+    const map = new Map<string, SuggestionItem>();
+
+    favorites.forEach((favorite) => {
+      map.set(favorite.canonicalName, {
+        canonicalName: favorite.canonicalName,
+        label: favorite.label,
+        quantity: favorite.quantity,
+        source: "favorite",
+      });
+    });
+
+    for (const item of allItems) {
+      const canonicalName = canonicalizeItemName(item.originalText);
+      if (!canonicalName) continue;
+      if (!map.has(canonicalName)) {
+        map.set(canonicalName, {
+          canonicalName,
+          label: item.originalText,
+          quantity: item.quantity,
+          source: "history",
+        });
+      }
+    }
+
+    return Array.from(map.values());
+  }, [allItems, favorites]);
+
+  const filteredSuggestions = useMemo(() => {
+    const query = itemName.trim().toLowerCase();
+    if (!query) return [];
+
+    return suggestionPool
+      .filter((item) => item.label.toLowerCase().includes(query))
+      .sort((a, b) => Number(b.source === "favorite") - Number(a.source === "favorite"))
+      .slice(0, 6);
+  }, [itemName, suggestionPool]);
+
+  const favoriteSuggestions = useMemo(() => favorites.slice(0, 8), [favorites]);
 
   async function submitStructuredItem(event?: FormEvent<HTMLFormElement>) {
     event?.preventDefault();
@@ -251,16 +324,44 @@ export function ShoppingApp({ workspace, initialLists }: Props) {
     localStorage.setItem("shop_theme", nextTheme);
   }
 
+  function toggleFavorite(item: FavoriteItem) {
+    setFavorites((current) => {
+      const exists = current.some((entry) => entry.canonicalName === item.canonicalName);
+      const next = exists
+        ? current.filter((entry) => entry.canonicalName !== item.canonicalName)
+        : [item, ...current].slice(0, 24);
+      localStorage.setItem(FAVORITES_STORAGE_KEY, JSON.stringify(next));
+      return next;
+    });
+  }
+
+  function applySuggestion(item: { label: string; quantity: string | null }) {
+    const amount = parseAmount(item.quantity);
+    const unit = parseUnit(item.quantity);
+    setItemName(item.label);
+    setItemAmount(amount);
+    setItemUnit(unit);
+  }
+
+  const totalBought = allItems.filter((item) => item.isBought).length;
+
   return (
     <div className={styles.desktopShell}>
       <div className={styles.phoneFrame}>
         <header className={styles.topBar}>
-          <div className={styles.workspaceBadge}>
-            <span className={styles.workspaceDot} />
-            <div>
-              <strong>{workspace.name}</strong>
-              <span>{pendingItems.length} в покупке</span>
-            </div>
+          <div className={styles.modeTabs}>
+            <button
+              className={mode === "shopping" ? styles.modeTabActive : styles.modeTab}
+              onClick={() => setMode("shopping")}
+            >
+              Покупки
+            </button>
+            <button
+              className={mode === "lists" ? styles.modeTabActive : styles.modeTab}
+              onClick={() => setMode("lists")}
+            >
+              Списки
+            </button>
           </div>
 
           <div className={styles.headerActions}>
@@ -275,40 +376,65 @@ export function ShoppingApp({ workspace, initialLists }: Props) {
 
         <section className={styles.statsRow}>
           <article className={styles.statCard}>
-            <span>Всего</span>
-            <strong>{allItems.length}</strong>
+            <span>Списков</span>
+            <strong>{lists.length}</strong>
           </article>
           <article className={styles.statCard}>
-            <span>Нужно купить</span>
+            <span>В покупке</span>
             <strong>{pendingItems.length}</strong>
           </article>
           <article className={styles.statCard}>
             <span>Куплено</span>
-            <strong>{boughtItems.length}</strong>
+            <strong>{totalBought}</strong>
           </article>
         </section>
 
-        <div className={styles.appGrid}>
-          <aside className={styles.listsColumn}>
-            <section className={styles.panel}>
+        {mode === "lists" ? (
+          <section className={styles.managementWrap}>
+            <div className={styles.panel}>
               <div className={styles.panelHeader}>
                 <div>
-                  <span className={styles.panelKicker}>Списки</span>
-                  <h2>Переключение и управление</h2>
+                  <span className={styles.panelKicker}>Управление</span>
+                  <h2>Списки и порядок работы</h2>
                 </div>
               </div>
 
-              <section className={styles.listChips}>
-                {lists.map((list) => (
+              <div className={styles.managementRow}>
+                <section className={styles.listChips}>
+                  {lists.map((list) => (
+                    <button
+                      key={list.id}
+                      className={list.id === activeList?.id ? styles.tabActive : styles.tab}
+                      onClick={() => setActiveListId(list.id)}
+                    >
+                      {list.title}
+                    </button>
+                  ))}
+                </section>
+
+                <div className={styles.managementActions}>
                   <button
-                    key={list.id}
-                    className={list.id === activeList?.id ? styles.tabActive : styles.tab}
-                    onClick={() => setActiveListId(list.id)}
+                    className={styles.iconTextButton}
+                    onClick={() => {
+                      if (!activeList) return;
+                      setRenameListTitle(activeList.title);
+                      setIsRenamingList(true);
+                    }}
+                    aria-label="Переименовать список"
+                    disabled={!activeList}
                   >
-                    {list.title}
+                    <EditIcon />
                   </button>
-                ))}
-              </section>
+                  <button
+                    className={styles.iconDangerButton}
+                    onClick={deleteActiveList}
+                    aria-label="Удалить список"
+                    disabled={!activeList}
+                  >
+                    <TrashIcon />
+                  </button>
+                </div>
+              </div>
 
               <div className={styles.topActions}>
                 <input
@@ -317,24 +443,6 @@ export function ShoppingApp({ workspace, initialLists }: Props) {
                   placeholder="Новый список"
                 />
                 <button onClick={createList} disabled={loading}>Создать</button>
-              </div>
-
-              <div className={styles.inlineActions}>
-                {!isRenamingList ? (
-                  <button
-                    className={styles.ghostButton}
-                    onClick={() => {
-                      if (!activeList) return;
-                      setRenameListTitle(activeList.title);
-                      setIsRenamingList(true);
-                    }}
-                  >
-                    Переименовать
-                  </button>
-                ) : null}
-                <button className={styles.dangerButton} onClick={deleteActiveList} disabled={!activeList}>
-                  Удалить
-                </button>
               </div>
 
               {isRenamingList ? (
@@ -351,31 +459,71 @@ export function ShoppingApp({ workspace, initialLists }: Props) {
                     placeholder="Название списка"
                     required
                   />
-                  <button className={styles.primaryMiniButton} type="submit">Сохранить</button>
-                  <button type="button" className={styles.ghostButton} onClick={() => setIsRenamingList(false)}>
-                    Отмена
-                  </button>
+                  <div className={styles.renameActions}>
+                    <button className={styles.primaryMiniButton} type="submit">Сохранить</button>
+                    <button type="button" className={styles.ghostButton} onClick={() => setIsRenamingList(false)}>
+                      Отмена
+                    </button>
+                  </div>
                 </form>
               ) : null}
-            </section>
-          </aside>
-
-          <section className={styles.composerColumn}>
+            </div>
+          </section>
+        ) : (
+          <div className={styles.shoppingGrid}>
             <section className={styles.panel}>
               <div className={styles.panelHeader}>
                 <div>
-                  <span className={styles.panelKicker}>Добавить</span>
-                  <h2>Новая покупка</h2>
+                  <span className={styles.panelKicker}>Новый пункт</span>
+                  <h2>Добавление, избранное и подсказки</h2>
                 </div>
               </div>
 
+              {favoriteSuggestions.length ? (
+                <div className={styles.favoriteSection}>
+                  <div className={styles.sectionCaption}>Избранные товары</div>
+                  <div className={styles.favoriteChips}>
+                    {favoriteSuggestions.map((item) => (
+                      <button
+                        key={item.canonicalName}
+                        className={styles.favoriteChip}
+                        onClick={() => applySuggestion(item)}
+                      >
+                        <StarIcon />
+                        <span>{item.label}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+
               <form className={styles.composer} onSubmit={submitStructuredItem}>
-                <input
-                  value={itemName}
-                  onChange={(e) => setItemName(e.target.value)}
-                  placeholder="Фарш индейки 1 кг, молоко 2 л, хлеб..."
-                  required
-                />
+                <div className={styles.inputStack}>
+                  <input
+                    value={itemName}
+                    onChange={(e) => setItemName(e.target.value)}
+                    placeholder="Фарш индейки 1 кг, молоко 2 л, хлеб..."
+                    required
+                  />
+                  {filteredSuggestions.length ? (
+                    <div className={styles.suggestionList}>
+                      {filteredSuggestions.map((item) => (
+                        <button
+                          key={`${item.source}-${item.canonicalName}`}
+                          type="button"
+                          className={styles.suggestionItem}
+                          onClick={() => applySuggestion(item)}
+                        >
+                          <div>
+                            <strong>{item.label}</strong>
+                            {item.quantity ? <small>{item.quantity}</small> : null}
+                          </div>
+                          <span>{item.source === "favorite" ? "избранное" : "подсказка"}</span>
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
 
                 <div className={styles.composerRow}>
                   <input value={itemAmount} onChange={(e) => setItemAmount(e.target.value)} placeholder="Кол-во" />
@@ -408,72 +556,123 @@ export function ShoppingApp({ workspace, initialLists }: Props) {
                 </div>
               ) : null}
             </section>
-          </section>
 
-          <main className={styles.contentColumn}>
-            <section className={styles.panel}>
-              <div className={styles.contentHeader}>
+            <main className={styles.panel}>
+              <div className={styles.panelTopRow}>
                 <div>
-                  <span className={styles.panelKicker}>Список</span>
-                  <h2>{activeList?.title ?? "Выберите список"}</h2>
+                  <span className={styles.panelKicker}>Списки</span>
+                  <h2>{listViewMode === "single" ? activeList?.title ?? "Выберите список" : "Все списки подряд"}</h2>
+                </div>
+
+                <div className={styles.inlineTopActions}>
+                  <div className={styles.modeTabs}>
+                    <button
+                      className={listViewMode === "single" ? styles.modeTabActive : styles.modeTab}
+                      onClick={() => setListViewMode("single")}
+                    >
+                      Один
+                    </button>
+                    <button
+                      className={listViewMode === "all" ? styles.modeTabActive : styles.modeTab}
+                      onClick={() => setListViewMode("all")}
+                    >
+                      Все
+                    </button>
+                  </div>
+
+                  <section className={styles.listChips}>
+                    {lists.map((list) => (
+                      <button
+                        key={list.id}
+                        className={list.id === activeList?.id ? styles.tabActive : styles.tab}
+                        onClick={() => setActiveListId(list.id)}
+                      >
+                        {list.title}
+                      </button>
+                    ))}
+                  </section>
                 </div>
               </div>
 
-              <div className={styles.card}>
-                {pendingItems.length ? (
-                  pendingItems.map((item) => (
-                    <ItemRow
-                      key={item.id}
-                      item={item}
-                      onToggle={() => updateItem(item.id, { isBought: !item.isBought })}
-                      onEdit={() =>
-                        setEditingItem({
-                          id: item.id,
-                          name: item.originalText,
-                          amount: parseAmount(item.quantity),
-                          unit: parseUnit(item.quantity),
-                        })
-                      }
-                      onDelete={() => removeItem(item.id)}
-                    />
-                  ))
-                ) : (
-                  <EmptyState text="Список пуст. Добавь первую покупку." />
-                )}
-              </div>
-            </section>
+              {listViewMode === "single" ? (
+                <div className={styles.listSections}>
+                  <ListCard
+                    title="Нужно купить"
+                    count={pendingItems.length}
+                    emptyText="Список пуст. Добавь первую покупку."
+                    items={pendingItems}
+                    onToggle={(item) => updateItem(item.id, { isBought: !item.isBought })}
+                    onEdit={(item) =>
+                      setEditingItem({
+                        id: item.id,
+                        name: item.originalText,
+                        amount: parseAmount(item.quantity),
+                        unit: parseUnit(item.quantity),
+                      })
+                    }
+                    onDelete={(item) => removeItem(item.id)}
+                    onToggleFavorite={toggleFavorite}
+                    favorites={favorites}
+                  />
 
-            <section className={styles.panel}>
-              <div className={styles.sectionHeading}>
-                <h3>Уже куплено</h3>
-                <span>{boughtItems.length}</span>
-              </div>
-
-              <div className={styles.card}>
-                {boughtItems.length ? (
-                  boughtItems.map((item) => (
-                    <ItemRow
-                      key={item.id}
-                      item={item}
-                      onToggle={() => updateItem(item.id, { isBought: !item.isBought })}
-                      onEdit={() =>
-                        setEditingItem({
-                          id: item.id,
-                          name: item.originalText,
-                          amount: parseAmount(item.quantity),
-                          unit: parseUnit(item.quantity),
-                        })
-                      }
-                      onDelete={() => removeItem(item.id)}
-                    />
-                  ))
-                ) : (
-                  <EmptyState text="Купленные товары пока не появились." />
-                )}
-              </div>
-            </section>
-          </main>
-        </div>
+                  <ListCard
+                    title="Уже куплено"
+                    count={boughtItems.length}
+                    emptyText="Купленные товары пока не появились."
+                    items={boughtItems}
+                    onToggle={(item) => updateItem(item.id, { isBought: !item.isBought })}
+                    onEdit={(item) =>
+                      setEditingItem({
+                        id: item.id,
+                        name: item.originalText,
+                        amount: parseAmount(item.quantity),
+                        unit: parseUnit(item.quantity),
+                      })
+                    }
+                    onDelete={(item) => removeItem(item.id)}
+                    onToggleFavorite={toggleFavorite}
+                    favorites={favorites}
+                  />
+                </div>
+              ) : (
+                <div className={styles.allListsWrap}>
+                  {lists.map((list) => (
+                    <section key={list.id} className={styles.allListSection}>
+                      <div className={styles.sectionHeading}>
+                        <h3>{list.title}</h3>
+                        <span>{list.items.length}</span>
+                      </div>
+                      <div className={styles.card}>
+                        {list.items.length ? (
+                          list.items.map((item) => (
+                            <ItemRow
+                              key={item.id}
+                              item={item}
+                              onToggle={() => updateItem(item.id, { isBought: !item.isBought })}
+                              onEdit={() =>
+                                setEditingItem({
+                                  id: item.id,
+                                  name: item.originalText,
+                                  amount: parseAmount(item.quantity),
+                                  unit: parseUnit(item.quantity),
+                                })
+                              }
+                              onDelete={() => removeItem(item.id)}
+                              onToggleFavorite={toggleFavorite}
+                              isFavorite={favorites.some((entry) => entry.canonicalName === canonicalizeItemName(item.originalText))}
+                            />
+                          ))
+                        ) : (
+                          <EmptyState text="В этом списке пока нет товаров." />
+                        )}
+                      </div>
+                    </section>
+                  ))}
+                </div>
+              )}
+            </main>
+          </div>
+        )}
 
         {editingItem ? (
           <div className={styles.sheetOverlay} onClick={() => setEditingItem(null)}>
@@ -524,16 +723,68 @@ export function ShoppingApp({ workspace, initialLists }: Props) {
   );
 }
 
+function ListCard({
+  title,
+  count,
+  emptyText,
+  items,
+  onToggle,
+  onEdit,
+  onDelete,
+  onToggleFavorite,
+  favorites,
+}: {
+  title: string;
+  count: number;
+  emptyText: string;
+  items: ShoppingItemDto[];
+  onToggle: (item: ShoppingItemDto) => void;
+  onEdit: (item: ShoppingItemDto) => void;
+  onDelete: (item: ShoppingItemDto) => void;
+  onToggleFavorite: (item: FavoriteItem) => void;
+  favorites: FavoriteItem[];
+}) {
+  return (
+    <section className={styles.listCard}>
+      <div className={styles.sectionHeading}>
+        <h3>{title}</h3>
+        <span>{count}</span>
+      </div>
+      <div className={styles.card}>
+        {items.length ? (
+          items.map((item) => (
+            <ItemRow
+              key={item.id}
+              item={item}
+              onToggle={() => onToggle(item)}
+              onEdit={() => onEdit(item)}
+              onDelete={() => onDelete(item)}
+              onToggleFavorite={onToggleFavorite}
+              isFavorite={favorites.some((entry) => entry.canonicalName === canonicalizeItemName(item.originalText))}
+            />
+          ))
+        ) : (
+          <EmptyState text={emptyText} />
+        )}
+      </div>
+    </section>
+  );
+}
+
 function ItemRow({
   item,
   onToggle,
   onEdit,
   onDelete,
+  onToggleFavorite,
+  isFavorite,
 }: {
   item: ShoppingItemDto;
   onToggle: () => void;
   onEdit: () => void;
   onDelete: () => void;
+  onToggleFavorite: (item: FavoriteItem) => void;
+  isFavorite: boolean;
 }) {
   return (
     <div className={styles.itemRow}>
@@ -549,6 +800,19 @@ function ItemRow({
           </div>
 
           <div className={styles.itemActions}>
+            <button
+              className={isFavorite ? styles.iconFavoriteActive : styles.iconTextButton}
+              onClick={() =>
+                onToggleFavorite({
+                  canonicalName: canonicalizeItemName(item.originalText),
+                  label: item.originalText,
+                  quantity: item.quantity,
+                })
+              }
+              aria-label="Избранное"
+            >
+              <StarIcon />
+            </button>
             <button className={styles.iconTextButton} onClick={onEdit} aria-label="Изменить">
               <EditIcon />
             </button>
@@ -719,6 +983,17 @@ function TrashIcon() {
   );
 }
 
+function StarIcon() {
+  return (
+    <svg viewBox="0 0 20 20" aria-hidden="true" className={styles.rowIcon}>
+      <path
+        d="m10 2.2 2.1 4.4 4.8.7-3.5 3.4.8 4.8-4.2-2.3-4.3 2.3.8-4.8-3.5-3.4 4.8-.7L10 2.2Z"
+        fill="currentColor"
+      />
+    </svg>
+  );
+}
+
 function parseAmount(quantity: string | null): string {
   if (!quantity) return "";
   const match = quantity.match(/^\s*(\d+[.,]?\d*)/);
@@ -779,6 +1054,7 @@ function inferDefaultQuantity(rawName: string): { amount: string; unit: string }
   if (/перец|огурец|помидор|томат|яблоко|банан|авокадо|лимон|лук/.test(name)) return { amount: "1", unit: "шт" };
   if (/яйц/.test(name)) return { amount: "10", unit: "шт" };
   if (/молоко|кефир|сок|вода/.test(name)) return { amount: "1", unit: "л" };
+  if (/фарш|мясо|курица|индейка/.test(name)) return { amount: "1", unit: "кг" };
 
   return { amount: "", unit: "" };
 }

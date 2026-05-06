@@ -26,47 +26,27 @@
   padding: 18px 20px 10px;
 }
 
-.workspaceBadge {
-  display: inline-flex;
-  align-items: center;
-  gap: 12px;
-  padding: 10px 14px;
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--surface) 92%, transparent);
-  box-shadow: var(--shadow-sm);
-}
-
-.workspaceDot {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: linear-gradient(135deg, var(--accent) 0%, var(--accent-strong) 100%);
-}
-
-.workspaceBadge strong,
-.workspaceBadge span {
-  display: block;
-}
-
-.workspaceBadge strong {
-  font-size: 0.96rem;
-}
-
-.workspaceBadge span {
-  margin-top: 2px;
-  color: var(--muted);
-  font-size: 0.8rem;
-}
-
-.headerActions {
+.headerActions,
+.modeTabs,
+.managementActions,
+.inlineTopActions,
+.renameActions,
+.itemActions,
+.favoriteChips,
+.listChips {
   display: flex;
   gap: 10px;
+  flex-wrap: wrap;
 }
 
-.iconButton,
+.modeTab,
+.modeTabActive,
 .tab,
 .tabActive,
+.iconButton,
+.iconTextButton,
+.iconDangerButton,
+.favoriteChip,
 .ghostButton,
 .dangerButton,
 .primaryMiniButton,
@@ -84,9 +64,27 @@
     box-shadow 0.18s ease;
 }
 
-.iconButton {
-  width: 46px;
-  height: 46px;
+.modeTab,
+.modeTabActive {
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 10px 16px;
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.modeTabActive {
+  background: var(--foreground);
+  border-color: var(--foreground);
+  color: var(--background);
+}
+
+.iconButton,
+.iconTextButton,
+.iconDangerButton {
+  width: 44px;
+  height: 44px;
   display: inline-grid;
   place-items: center;
   border: 1px solid var(--border);
@@ -96,9 +94,32 @@
   box-shadow: var(--shadow-sm);
 }
 
+.iconDangerButton {
+  border-color: var(--danger-border);
+  color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 9%, var(--surface));
+}
+
+.iconFavoriteActive {
+  width: 44px;
+  height: 44px;
+  display: inline-grid;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--border));
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--accent) 12%, var(--surface));
+  color: var(--accent-strong);
+  box-shadow: var(--shadow-sm);
+}
+
 .iconSvg {
   width: 22px;
   height: 22px;
+}
+
+.rowIcon {
+  width: 18px;
+  height: 18px;
 }
 
 .statsRow {
@@ -132,21 +153,18 @@
   letter-spacing: -0.04em;
 }
 
-.appGrid {
-  display: grid;
-  gap: 18px;
+.managementWrap,
+.shoppingGrid {
   padding: 0 20px 20px;
 }
 
-.listsColumn,
-.composerColumn,
-.contentColumn {
-  display: flex;
-  flex-direction: column;
+.shoppingGrid {
+  display: grid;
   gap: 18px;
 }
 
-.panel {
+.panel,
+.listCard {
   padding: 18px;
   border: 1px solid var(--border);
   border-radius: 28px;
@@ -155,14 +173,17 @@
   box-shadow: var(--shadow-sm);
 }
 
-.panelHeader {
+.panelHeader,
+.panelTopRow,
+.managementRow {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
-  gap: 12px;
+  gap: 16px;
 }
 
-.panelKicker {
+.panelKicker,
+.sectionCaption {
   display: inline-block;
   margin-bottom: 8px;
   color: var(--accent-strong);
@@ -173,17 +194,14 @@
 }
 
 .panelHeader h2,
-.contentHeader h2 {
+.panelTopRow h2 {
   font-size: clamp(1.18rem, 2vw, 1.8rem);
   letter-spacing: -0.04em;
   line-height: 1.05;
 }
 
 .listChips {
-  display: flex;
-  gap: 10px;
   overflow-x: auto;
-  margin-top: 14px;
   padding-bottom: 2px;
   scrollbar-width: none;
 }
@@ -211,27 +229,28 @@
 }
 
 .topActions,
-.renameRow {
-  display: grid;
+.renameRow,
+.composer {
+  display: flex;
+  flex-direction: column;
   gap: 10px;
   margin-top: 14px;
 }
 
 .topActions {
+  display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
 }
 
-.inlineActions {
-  display: flex;
-  gap: 10px;
-  margin-top: 10px;
-  flex-wrap: wrap;
+.renameActions {
+  margin-top: 4px;
 }
 
 .topActions input,
 .renameRow input,
 .composer input,
-.sheet input {
+.sheet input,
+.inputStack input {
   width: 100%;
   min-width: 0;
   border: 1px solid var(--border);
@@ -246,9 +265,7 @@
 .submitButton,
 .primaryMiniButton,
 .ghostButton,
-.dangerButton,
-.iconTextButton,
-.iconDangerButton {
+.dangerButton {
   border-radius: 18px;
   padding: 12px 16px;
   font-weight: 700;
@@ -275,33 +292,60 @@
   background: color-mix(in srgb, var(--danger) 9%, var(--surface));
 }
 
-.iconTextButton,
-.iconDangerButton {
-  width: 42px;
-  height: 42px;
-  display: inline-grid;
-  place-items: center;
-  padding: 0;
+.favoriteSection {
+  margin-top: 14px;
+}
+
+.favoriteChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 10px 14px;
   background: color-mix(in srgb, var(--surface) 92%, transparent);
   color: var(--foreground);
+  font-weight: 700;
 }
 
-.iconDangerButton {
-  border-color: var(--danger-border);
-  color: var(--danger);
-  background: color-mix(in srgb, var(--danger) 9%, var(--surface));
+.inputStack {
+  position: relative;
 }
 
-.renameRow {
-  grid-template-columns: minmax(0, 1fr);
+.suggestionList {
+  margin-top: 8px;
+  display: grid;
+  gap: 8px;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  background: color-mix(in srgb, var(--surface) 96%, transparent);
+  box-shadow: var(--shadow-sm);
 }
 
-.composer {
-  margin-top: 14px;
+.suggestionItem {
   display: flex;
-  flex-direction: column;
-  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border: none;
+  border-radius: 14px;
+  padding: 12px;
+  background: transparent;
+  text-align: left;
+}
+
+.suggestionItem strong {
+  display: block;
+}
+
+.suggestionItem small,
+.suggestionItem span {
+  color: var(--muted);
+}
+
+.suggestionItem span {
+  font-size: 0.82rem;
 }
 
 .composerRow {
@@ -406,8 +450,11 @@
   color: var(--muted);
 }
 
-.contentHeader {
-  margin-bottom: 14px;
+.listSections,
+.allListsWrap {
+  display: grid;
+  gap: 18px;
+  margin-top: 16px;
 }
 
 .sectionHeading {
@@ -493,17 +540,6 @@
   color: var(--muted);
 }
 
-.itemActions {
-  display: inline-flex;
-  gap: 8px;
-  flex-shrink: 0;
-}
-
-.rowIcon {
-  width: 18px;
-  height: 18px;
-}
-
 .emptyState {
   padding: 28px 18px;
   color: var(--muted);
@@ -571,18 +607,22 @@
 }
 
 @media (hover: hover) and (pointer: fine) {
-  .iconButton:hover,
+  .modeTab:hover,
   .tab:hover,
+  .iconButton:hover,
+  .iconTextButton:hover,
+  .iconDangerButton:hover,
+  .iconFavoriteActive:hover,
+  .favoriteChip:hover,
   .ghostButton:hover,
   .dangerButton:hover,
   .primaryMiniButton:hover,
   .topActions button:hover,
   .submitButton:hover,
-  .iconTextButton:hover,
-  .iconDangerButton:hover,
   .checkbox:hover,
   .selectTrigger:hover,
-  .selectOption:hover {
+  .selectOption:hover,
+  .suggestionItem:hover {
     transform: translateY(-1px);
     box-shadow: var(--shadow-sm);
   }
@@ -593,16 +633,9 @@
     padding: 22px;
   }
 
-  .appGrid {
-    grid-template-columns: minmax(280px, 320px) minmax(320px, 380px) minmax(0, 1fr);
+  .shoppingGrid {
+    grid-template-columns: minmax(360px, 420px) minmax(0, 1fr);
     align-items: start;
-  }
-
-  .listsColumn,
-  .composerColumn {
-    position: sticky;
-    top: 20px;
-    align-self: start;
   }
 
   .sheetOverlay {
@@ -611,12 +644,6 @@
 
   .sheetActions {
     grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-}
-
-@media (max-width: 1119px) {
-  .appGrid {
-    grid-template-columns: 1fr;
   }
 }
 
@@ -633,15 +660,17 @@
   }
 }
 
-@media (max-width: 640px) {
-  .topBar {
-    padding: 16px 16px 10px;
-  }
-
+@media (max-width: 720px) {
+  .topBar,
   .statsRow,
-  .appGrid {
+  .managementWrap,
+  .shoppingGrid {
     padding-left: 16px;
     padding-right: 16px;
+  }
+
+  .topBar {
+    padding-top: 16px;
   }
 
   .statsRow {
@@ -653,15 +682,19 @@
     grid-template-columns: 1fr;
   }
 
-  .itemLine {
+  .panelHeader,
+  .panelTopRow,
+  .managementRow {
     flex-direction: column;
   }
 
-  .itemActions {
-    margin-top: 10px;
+  .inlineTopActions,
+  .itemLine {
+    flex-direction: column;
+    align-items: stretch;
   }
 
-  .workspaceBadge {
-    min-width: 0;
+  .itemActions {
+    justify-content: flex-start;
   }
 }
