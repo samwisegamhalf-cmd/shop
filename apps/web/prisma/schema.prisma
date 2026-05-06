@@ -81,7 +81,6 @@ model ShoppingItem {
   originalText    String
   normalizedName  String
   quantity        String?
-  category        String?
   isBought        Boolean      @default(false)
   position        Int          @default(0)
   source          ItemSource   @default(MANUAL)
@@ -101,7 +100,6 @@ model ProductDictionary {
   synonym        String
   normalizedName String
   defaultUnit    String?
-  defaultCategory String?
   language       String?
   confidence     Float?
   createdAt      DateTime  @default(now())
@@ -130,7 +128,6 @@ model RecipeIngredient {
   normalizedName String
   quantity       String?
   unit           String?
-  category       String?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
   recipe         Recipe   @relation(fields: [recipeId], references: [id], onDelete: Cascade)

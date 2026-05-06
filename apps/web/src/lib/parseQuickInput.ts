@@ -4,7 +4,6 @@ export type ParsedQuickItem = {
   originalText: string;
   normalizedName: string;
   quantity: string | null;
-  category: string | null;
   source: ItemSource;
   language: string;
   confidence: number;
@@ -28,7 +27,6 @@ export function parseQuickInput(input: string): ParsedQuickItem[] {
         originalText: raw,
         normalizedName: normalizedName || raw.toLowerCase(),
         quantity,
-        category: null,
         source: ItemSource.MANUAL,
         language: "und",
         confidence: 1,

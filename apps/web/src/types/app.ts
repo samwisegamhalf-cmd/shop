@@ -9,7 +9,6 @@ export type ShoppingItemDto = {
   originalText: string;
   normalizedName: string;
   quantity: string | null;
-  category: string | null;
   isBought: boolean;
   source: string;
   language: string | null;

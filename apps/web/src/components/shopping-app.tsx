@@ -115,7 +115,6 @@ export function ShoppingApp({ workspace, initialLists }: Props) {
             originalText: parsedName,
             normalizedName: parsedName.toLowerCase(),
             quantity: quantity || null,
-            category: null,
           },
         ],
       }),
@@ -204,7 +203,6 @@ export function ShoppingApp({ workspace, initialLists }: Props) {
       originalText: editingItem.name.trim(),
       normalizedName: editingItem.name.trim().toLowerCase(),
       quantity: quantity || null,
-      category: null,
     });
     setEditingItem(null);
   }

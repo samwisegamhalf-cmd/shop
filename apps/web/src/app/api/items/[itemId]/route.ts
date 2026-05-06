@@ -8,7 +8,6 @@ const updateItemSchema = z.object({
   originalText: z.string().trim().min(1).optional(),
   normalizedName: z.string().trim().min(1).optional(),
   quantity: z.string().trim().min(1).nullable().optional(),
-  category: z.string().trim().min(1).nullable().optional(),
   isBought: z.boolean().optional(),
   source: z
     .enum([

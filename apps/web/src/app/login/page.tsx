@@ -50,7 +50,7 @@ export default function LoginPage() {
       } else if (data.error === "User already exists") {
         setError("Пользователь с таким email уже существует");
       } else if (data.error === "Invalid payload") {
-        setError("Проверьте корректность введенных данных");
+        setError("Проверь корректность введенных данных");
       } else {
         setError("Ошибка авторизации");
       }
@@ -97,133 +97,164 @@ export default function LoginPage() {
     setMode("login");
   }
 
+  const title = showRecovery ? "Восстановление" : mode === "login" ? "Вход" : "Регистрация";
+  const subtitle = showRecovery
+    ? "Обновите пароль с помощью recovery key."
+    : mode === "login"
+      ? "Откройте свои списки и продолжайте с того же места."
+      : "Создайте рабочее пространство и начните вести покупки вместе.";
+
   return (
     <main className={styles.page}>
-      <form onSubmit={showRecovery ? handleRecovery : handleSubmit} className={styles.form}>
-        <h1>{mode === "login" ? "Вход" : "Регистрация"}</h1>
-        {showRecovery ? (
-          <>
-            <input
-              type="email"
-              value={recoveryEmail}
-              onChange={(e) => setRecoveryEmail(e.target.value)}
-              placeholder="Email аккаунта"
-              required
-            />
-            <div className={styles.passwordRow}>
+      <section className={styles.shell}>
+        <div className={styles.hero}>
+          <span className={styles.eyebrow}>Shop List</span>
+          <h1>Покупки без путаницы на телефоне и на большом экране.</h1>
+          <p>
+            Один общий список, быстрый ввод товаров, история изменений и аккуратный интерфейс,
+            который одинаково удобно работает дома, в магазине и за ноутбуком.
+          </p>
+        </div>
+
+        <form onSubmit={showRecovery ? handleRecovery : handleSubmit} className={styles.form}>
+          <div className={styles.formHeader}>
+            <span className={styles.formKicker}>
+              {showRecovery ? "Доступ" : mode === "login" ? "С возвращением" : "Новый аккаунт"}
+            </span>
+            <h2>{title}</h2>
+            <p>{subtitle}</p>
+          </div>
+
+          {showRecovery ? (
+            <>
               <input
-                type={showRecoveryPassword ? "text" : "password"}
-                value={recoveryPassword}
-                onChange={(e) => setRecoveryPassword(e.target.value)}
-                placeholder="Новый пароль"
-                minLength={6}
+                type="email"
+                value={recoveryEmail}
+                onChange={(e) => setRecoveryEmail(e.target.value)}
+                placeholder="Email аккаунта"
                 required
               />
-              <button
-                type="button"
-                className={styles.eyeButton}
-                onClick={() => setShowRecoveryPassword((value) => !value)}
-              >
-                {showRecoveryPassword ? "🙈" : "👁"}
-              </button>
-            </div>
-            <div className={styles.passwordRow}>
-              <input
-                type={showRecoveryMasterKey ? "text" : "password"}
-                value={recoveryMasterKey}
-                onChange={(e) => setRecoveryMasterKey(e.target.value)}
-                placeholder="Recovery master key"
-                minLength={8}
-                required
-              />
-              <button
-                type="button"
-                className={styles.eyeButton}
-                onClick={() => setShowRecoveryMasterKey((value) => !value)}
-              >
-                {showRecoveryMasterKey ? "🙈" : "👁"}
-              </button>
-            </div>
-          </>
-        ) : (
-          <>
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="Email"
-              required
-            />
-            <div className={styles.passwordRow}>
-              <input
-                type={showPassword ? "text" : "password"}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="Пароль"
-                minLength={6}
-                required
-              />
-              <button
-                type="button"
-                className={styles.eyeButton}
-                onClick={() => setShowPassword((value) => !value)}
-              >
-                {showPassword ? "🙈" : "👁"}
-              </button>
-            </div>
-            {mode === "register" ? (
-              <>
+              <div className={styles.passwordRow}>
                 <input
-                  value={displayName}
-                  onChange={(e) => setDisplayName(e.target.value)}
-                  placeholder="Ваше имя (опционально)"
-                />
-                <input
-                  value={workspaceName}
-                  onChange={(e) => setWorkspaceName(e.target.value)}
-                  placeholder="Название пространства"
+                  type={showRecoveryPassword ? "text" : "password"}
+                  value={recoveryPassword}
+                  onChange={(e) => setRecoveryPassword(e.target.value)}
+                  placeholder="Новый пароль"
+                  minLength={6}
                   required
                 />
-              </>
+                <button
+                  type="button"
+                  className={styles.eyeButton}
+                  onClick={() => setShowRecoveryPassword((value) => !value)}
+                  aria-label="Показать пароль"
+                >
+                  {showRecoveryPassword ? "Скрыть" : "Показать"}
+                </button>
+              </div>
+              <div className={styles.passwordRow}>
+                <input
+                  type={showRecoveryMasterKey ? "text" : "password"}
+                  value={recoveryMasterKey}
+                  onChange={(e) => setRecoveryMasterKey(e.target.value)}
+                  placeholder="Recovery master key"
+                  minLength={8}
+                  required
+                />
+                <button
+                  type="button"
+                  className={styles.eyeButton}
+                  onClick={() => setShowRecoveryMasterKey((value) => !value)}
+                  aria-label="Показать recovery key"
+                >
+                  {showRecoveryMasterKey ? "Скрыть" : "Показать"}
+                </button>
+              </div>
+            </>
+          ) : (
+            <>
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="Email"
+                required
+              />
+              <div className={styles.passwordRow}>
+                <input
+                  type={showPassword ? "text" : "password"}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Пароль"
+                  minLength={6}
+                  required
+                />
+                <button
+                  type="button"
+                  className={styles.eyeButton}
+                  onClick={() => setShowPassword((value) => !value)}
+                  aria-label="Показать пароль"
+                >
+                  {showPassword ? "Скрыть" : "Показать"}
+                </button>
+              </div>
+              {mode === "register" ? (
+                <>
+                  <input
+                    value={displayName}
+                    onChange={(e) => setDisplayName(e.target.value)}
+                    placeholder="Ваше имя, если хотите"
+                  />
+                  <input
+                    value={workspaceName}
+                    onChange={(e) => setWorkspaceName(e.target.value)}
+                    placeholder="Название пространства"
+                    required
+                  />
+                </>
+              ) : null}
+            </>
+          )}
+
+          <button disabled={loading} type="submit" className={styles.submitButton}>
+            {loading ? "..." : showRecovery ? "Сбросить пароль" : mode === "login" ? "Войти" : "Создать аккаунт"}
+          </button>
+
+          {error ? <p className={styles.error}>{error}</p> : null}
+          {info ? <p className={styles.info}>{info}</p> : null}
+
+          <div className={styles.footerActions}>
+            {mode === "login" ? (
+              <button
+                type="button"
+                className={styles.switch}
+                onClick={() => {
+                  setShowRecovery((value) => !value);
+                  setError(null);
+                  setInfo(null);
+                }}
+              >
+                {showRecovery ? "Назад ко входу" : "Забыли пароль?"}
+              </button>
             ) : null}
-          </>
-        )}
 
-        <button disabled={loading} type="submit">
-          {loading ? "..." : showRecovery ? "Сбросить пароль" : mode === "login" ? "Войти" : "Создать аккаунт"}
-        </button>
-        {error ? <p className={styles.error}>{error}</p> : null}
-        {info ? <p className={styles.info}>{info}</p> : null}
-
-        {mode === "login" ? (
-          <button
-            type="button"
-            className={styles.switch}
-            onClick={() => {
-              setShowRecovery((value) => !value);
-              setError(null);
-              setInfo(null);
-            }}
-          >
-            {showRecovery ? "Назад ко входу" : "Забыли пароль?"}
-          </button>
-        ) : null}
-
-        {!showRecovery ? (
-          <button
-            type="button"
-            className={styles.switch}
-            onClick={() => {
-              setMode(mode === "login" ? "register" : "login");
-              setError(null);
-              setInfo(null);
-              setShowRecovery(false);
-            }}
-          >
-            {mode === "login" ? "Нет аккаунта? Зарегистрироваться" : "Уже есть аккаунт? Войти"}
-          </button>
-        ) : null}
-      </form>
+            {!showRecovery ? (
+              <button
+                type="button"
+                className={styles.switch}
+                onClick={() => {
+                  setMode(mode === "login" ? "register" : "login");
+                  setError(null);
+                  setInfo(null);
+                  setShowRecovery(false);
+                }}
+              >
+                {mode === "login" ? "Нет аккаунта? Зарегистрироваться" : "Уже есть аккаунт? Войти"}
+              </button>
+            ) : null}
+          </div>
+        </form>
+      </section>
     </main>
   );
 }
