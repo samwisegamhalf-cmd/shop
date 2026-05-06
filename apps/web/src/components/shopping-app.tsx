@@ -1,6 +1,6 @@
 "use client";
 
-import { CSSProperties, FormEvent, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import { FormEvent, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 
 import type {
   FavoriteProductDto,
@@ -33,8 +33,6 @@ type EditingState = {
 type RenameState = {
   id: string;
   title: string;
-  icon: string;
-  color: string;
 };
 
 type MergeNotice = {
@@ -67,24 +65,6 @@ const UNIT_OPTIONS: SelectOption[] = [
   { value: "уп", label: "уп" },
 ];
 
-const LIST_ICON_OPTIONS: SelectOption[] = [
-  { value: "list", label: "Список" },
-  { value: "cart", label: "Продукты" },
-  { value: "pill", label: "Аптека" },
-  { value: "sparkle", label: "Косметика" },
-  { value: "home", label: "Дом" },
-  { value: "gift", label: "Подарки" },
-];
-
-const LIST_COLOR_OPTIONS: SelectOption[] = [
-  { value: "teal", label: "Бирюзовый" },
-  { value: "orange", label: "Оранжевый" },
-  { value: "rose", label: "Розовый" },
-  { value: "blue", label: "Синий" },
-  { value: "green", label: "Зеленый" },
-  { value: "slate", label: "Графит" },
-];
-
 export function ShoppingApp({
   workspace,
   initialLists,
@@ -97,8 +77,6 @@ export function ShoppingApp({
   const [itemAmount, setItemAmount] = useState("");
   const [itemUnit, setItemUnit] = useState("");
   const [newListTitle, setNewListTitle] = useState("");
-  const [newListIcon, setNewListIcon] = useState("list");
-  const [newListColor, setNewListColor] = useState("teal");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [editingItem, setEditingItem] = useState<EditingState | null>(null);
@@ -121,7 +99,7 @@ export function ShoppingApp({
   }, [lists, activeListId]);
 
   const activeListOptions = useMemo(
-    () => lists.map((list) => ({ value: list.id, label: `${iconForList(list.icon)} ${list.title}` })),
+    () => lists.map((list) => ({ value: list.id, label: list.title })),
     [lists],
   );
 
@@ -327,7 +305,6 @@ export function ShoppingApp({
 
   async function createList() {
     if (!newListTitle.trim()) return;
-    const inferred = inferListPreset(newListTitle);
 
     const res = await fetch("/api/lists", {
       method: "POST",
@@ -335,8 +312,6 @@ export function ShoppingApp({
       body: JSON.stringify({
         workspaceId: workspace.id,
         title: newListTitle.trim(),
-        icon: newListIcon || inferred.icon,
-        color: newListColor || inferred.color,
       }),
     });
 
@@ -346,8 +321,6 @@ export function ShoppingApp({
     }
 
     setNewListTitle("");
-    setNewListIcon("list");
-    setNewListColor("teal");
     await loadLists();
   }
 
@@ -359,8 +332,6 @@ export function ShoppingApp({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         title: renamingList.title.trim(),
-        icon: renamingList.icon,
-        color: renamingList.color,
       }),
     });
 
@@ -534,9 +505,8 @@ export function ShoppingApp({
                     <button
                       className={list.id === activeListId ? styles.managementOpenActive : styles.managementOpen}
                       onClick={() => setActiveListId(list.id)}
-                      style={listToneStyle(list.color)}
                     >
-                      <span>{iconForList(list.icon)} {list.title}</span>
+                      <span>{list.title}</span>
                       <small>{list.items.length} товаров</small>
                     </button>
                     <div className={styles.managementActions}>
@@ -546,8 +516,6 @@ export function ShoppingApp({
                           setRenamingList({
                             id: list.id,
                             title: list.title,
-                            icon: list.icon,
-                            color: list.color,
                           })
                         }
                         aria-label="Переименовать список"
@@ -569,31 +537,9 @@ export function ShoppingApp({
               <div className={styles.topActions}>
                 <input
                   value={newListTitle}
-                  onChange={(e) => {
-                    const nextTitle = e.target.value;
-                    setNewListTitle(nextTitle);
-                    const inferred = inferListPreset(nextTitle);
-                    setNewListIcon(inferred.icon);
-                    setNewListColor(inferred.color);
-                  }}
+                  onChange={(e) => setNewListTitle(e.target.value)}
                   placeholder="Новый список"
                 />
-                <div className={styles.listMetaRow}>
-                  <SelectField
-                    value={newListIcon}
-                    onChange={setNewListIcon}
-                    options={LIST_ICON_OPTIONS}
-                    placeholder="Иконка"
-                    ariaLabel="Иконка списка"
-                  />
-                  <SelectField
-                    value={newListColor}
-                    onChange={setNewListColor}
-                    options={LIST_COLOR_OPTIONS}
-                    placeholder="Цвет"
-                    ariaLabel="Цвет списка"
-                  />
-                </div>
                 <button onClick={createList} disabled={loading}>Создать</button>
               </div>
 
@@ -611,22 +557,6 @@ export function ShoppingApp({
                     placeholder="Название списка"
                     required
                   />
-                  <div className={styles.listMetaRow}>
-                    <SelectField
-                      value={renamingList.icon}
-                      onChange={(value) => setRenamingList({ ...renamingList, icon: value })}
-                      options={LIST_ICON_OPTIONS}
-                      placeholder="Иконка"
-                      ariaLabel="Иконка списка"
-                    />
-                    <SelectField
-                      value={renamingList.color}
-                      onChange={(value) => setRenamingList({ ...renamingList, color: value })}
-                      options={LIST_COLOR_OPTIONS}
-                      placeholder="Цвет"
-                      ariaLabel="Цвет списка"
-                    />
-                  </div>
                   <div className={styles.renameActions}>
                     <button className={styles.primaryMiniButton} type="submit">Сохранить</button>
                     <button type="button" className={styles.ghostButton} onClick={() => setRenamingList(null)}>
@@ -1268,43 +1198,4 @@ function labelForSuggestion(source: SuggestionItem["source"]): string {
   if (source === "favorite") return "избранное";
   if (source === "frequent") return "часто";
   return "подсказка";
-}
-
-function inferListPreset(title: string): { icon: string; color: string } {
-  const value = title.trim().toLowerCase();
-
-  if (/аптек|лекар|витамин/.test(value)) return { icon: "pill", color: "blue" };
-  if (/космет|уход|крем|макияж/.test(value)) return { icon: "sparkle", color: "rose" };
-  if (/дом|уборк|быт|хим/.test(value)) return { icon: "home", color: "orange" };
-  if (/подар|праздн/.test(value)) return { icon: "gift", color: "rose" };
-  if (/продукт|еда|магазин|покупк/.test(value)) return { icon: "cart", color: "teal" };
-
-  return { icon: "list", color: "slate" };
-}
-
-function iconForList(icon: string): string {
-  if (icon === "cart") return "🛒";
-  if (icon === "pill") return "💊";
-  if (icon === "sparkle") return "✨";
-  if (icon === "home") return "🧴";
-  if (icon === "gift") return "🎁";
-  return "📋";
-}
-
-function listToneStyle(color: string): CSSProperties {
-  const palette: Record<string, { bg: string; border: string; text: string }> = {
-    teal: { bg: "rgba(31, 138, 120, 0.12)", border: "rgba(31, 138, 120, 0.28)", text: "#165f53" },
-    orange: { bg: "rgba(234, 120, 49, 0.12)", border: "rgba(234, 120, 49, 0.28)", text: "#b85a19" },
-    rose: { bg: "rgba(219, 96, 120, 0.12)", border: "rgba(219, 96, 120, 0.28)", text: "#a84b60" },
-    blue: { bg: "rgba(76, 133, 212, 0.12)", border: "rgba(76, 133, 212, 0.28)", text: "#295b9d" },
-    green: { bg: "rgba(88, 164, 95, 0.12)", border: "rgba(88, 164, 95, 0.28)", text: "#2f7a36" },
-    slate: { bg: "rgba(80, 91, 107, 0.10)", border: "rgba(80, 91, 107, 0.22)", text: "#364150" },
-  };
-
-  const tone = palette[color] ?? palette.teal;
-  return {
-    background: tone.bg,
-    borderColor: tone.border,
-    color: tone.text,
-  };
 }
